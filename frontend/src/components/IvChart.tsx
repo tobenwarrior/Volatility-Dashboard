@@ -20,6 +20,8 @@ interface IvChartProps {
   tenorData?: TenorData;
 }
 
+const SGT_OFFSET = 8 * 3600; // UTC+8
+
 function toLineData(
   raw: HistoryPoint[],
   field: "atm_iv" | "rr_25d"
@@ -28,7 +30,7 @@ function toLineData(
   for (const point of raw) {
     const value = point[field];
     if (value == null) continue;
-    out.push({ time: point.time as UTCTimestamp, value });
+    out.push({ time: (point.time + SGT_OFFSET) as UTCTimestamp, value });
   }
   return out;
 }
@@ -167,7 +169,7 @@ function SingleChart({
               className="inline-block h-0 w-4 border-t border-dashed"
               style={{ borderColor: T1_COLOR }}
             />
-            <span className="text-white/40">T-1 ({formatter(t1Value)})</span>
+            <span className="text-white/40">24h ago ({formatter(t1Value)})</span>
           </span>
         )}
       </div>
