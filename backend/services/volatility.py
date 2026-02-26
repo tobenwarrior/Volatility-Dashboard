@@ -103,14 +103,24 @@ class VolatilityCalculator:
         t2_years = t2_days / 365.25
         t_target_years = target_days / 365.25
 
+        if abs(t2_years - t1_years) < 1e-10:
+            return {"error": "Bracketing expiries too close together"}
+
         sigma1 = t1_iv / 100.0
         sigma2 = t2_iv / 100.0
 
         v1 = sigma1 ** 2 * t1_years
         v2 = sigma2 ** 2 * t2_years
 
-        v_target = v1 + (v2 - v1) / (t2_years - t1_years) * (t_target_years - t1_years)
+        v_target = v1 + (v2 - v1) * (t_target_years - t1_years) / (t2_years - t1_years)
+
+        if v_target <= 0:
+            return {"error": "Negative interpolated variance (extreme term structure inversion)"}
+
         vol = math.sqrt(v_target / t_target_years) * 100.0
+
+        if vol > 500 or vol < 0.01:
+            return {"error": f"IV out of reasonable bounds: {vol:.2f}"}
 
         return {
             "atm_iv": vol,
@@ -228,14 +238,24 @@ class VolatilityCalculator:
         t2_years = t2_days / 365.25
         t30_years = self._target_days / 365.25
 
+        if abs(t2_years - t1_years) < 1e-10:
+            return {"error": "Bracketing expiries too close together", "timestamp": ts}
+
         sigma1 = t1_iv / 100.0
         sigma2 = t2_iv / 100.0
 
         v1 = sigma1 ** 2 * t1_years
         v2 = sigma2 ** 2 * t2_years
 
-        v30 = v1 + (v2 - v1) / (t2_years - t1_years) * (t30_years - t1_years)
+        v30 = v1 + (v2 - v1) * (t30_years - t1_years) / (t2_years - t1_years)
+
+        if v30 <= 0:
+            return {"error": "Negative interpolated variance", "timestamp": ts}
+
         vol_30d = math.sqrt(v30 / t30_years) * 100.0
+
+        if vol_30d > 500 or vol_30d < 0.01:
+            return {"error": f"IV out of reasonable bounds: {vol_30d:.2f}", "timestamp": ts}
 
         return VolatilityResult(
             timestamp=ts,

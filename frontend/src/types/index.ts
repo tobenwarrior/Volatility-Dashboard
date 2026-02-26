@@ -12,6 +12,7 @@ export interface TenorData {
 
 export interface VolStatsEntry {
   label: string;
+  current_iv: number | null;
   iv_high: number | null;
   iv_low: number | null;
   iv_percentile: number | null;

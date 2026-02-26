@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 interface PriceTickerProps {
   price: number | null;
   prevPrice: number | null;
+  stale?: boolean;
 }
 
-export default function PriceTicker({ price, prevPrice }: PriceTickerProps) {
+export default function PriceTicker({ price, prevPrice, stale }: PriceTickerProps) {
   const [flash, setFlash] = useState<"green" | "red" | null>(null);
 
   useEffect(() => {
@@ -26,9 +27,16 @@ export default function PriceTicker({ price, prevPrice }: PriceTickerProps) {
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wider text-deribit-gray">
-        BTC / USD
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wider text-deribit-gray">
+          BTC / USD
+        </span>
+        {stale && (
+          <span className="rounded bg-deribit-red/20 px-1.5 py-0.5 text-[10px] font-medium text-deribit-red">
+            STALE
+          </span>
+        )}
+      </div>
       <span
         className={`text-3xl font-bold tabular-nums transition-colors duration-300 ${flashClass}`}
       >

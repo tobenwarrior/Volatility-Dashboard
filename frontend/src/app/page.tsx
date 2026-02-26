@@ -17,7 +17,7 @@ const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
 
 export default function Home() {
   const { data, error, isLoading } = useTenors();
-  const { price, prevPrice } = usePrice();
+  const { price, prevPrice, stale } = usePrice();
 
   const [selectedTenor, setSelectedTenor] = useState<TenorLabel>("30D");
   const [selectedRange, setSelectedRange] = useState<TimeRange>("1H");
@@ -36,7 +36,7 @@ export default function Home() {
         <StatusBadge isLoading={isLoading} error={error} />
       </div>
 
-      <PriceTicker price={price} prevPrice={prevPrice} />
+      <PriceTicker price={price} prevPrice={prevPrice} stale={stale} />
 
       <div className="w-full rounded-xl border border-white/[0.08] bg-surface-raised p-6">
         <h2 className="mb-5 text-sm font-medium uppercase tracking-wider text-deribit-gray">

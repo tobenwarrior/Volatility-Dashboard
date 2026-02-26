@@ -7,22 +7,24 @@ import TimeRangeSelector from "@/components/TimeRangeSelector";
 
 function PercentileCell({ value }: { value: number | null }) {
   if (value == null) return <span className="text-white/40">&mdash;</span>;
+  // Red = IV rich (expensive, sell signal), Green = IV cheap (opportunity, buy signal)
   const color =
     value >= 70
-      ? "text-deribit-green"
+      ? "text-deribit-red"
       : value <= 30
-        ? "text-deribit-red"
+        ? "text-deribit-green"
         : "text-white/80";
   return <span className={color}>{Math.round(value)}th</span>;
 }
 
 function ZScoreCell({ value }: { value: number | null }) {
   if (value == null) return <span className="text-white/40">&mdash;</span>;
+  // Red = IV elevated (rich), Green = IV depressed (cheap)
   const color =
     value > 1
-      ? "text-deribit-green"
+      ? "text-deribit-red"
       : value < -1
-        ? "text-deribit-red"
+        ? "text-deribit-green"
         : "text-white/80";
   const sign = value > 0 ? "+" : "";
   return <span className={color}>{sign}{value.toFixed(2)}</span>;
@@ -32,9 +34,9 @@ function PercentileBar({ value }: { value: number | null }) {
   if (value == null) return null;
   const fill =
     value >= 70
-      ? "bg-deribit-green/60"
+      ? "bg-deribit-red/60"
       : value <= 30
-        ? "bg-deribit-red/60"
+        ? "bg-deribit-green/60"
         : "bg-deribit-blue/40";
   return (
     <div className="mt-1 h-1 w-full rounded-full bg-white/[0.06]">
@@ -51,6 +53,9 @@ function StatsRow({ entry }: { entry: VolStatsEntry }) {
     <tr className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors">
       <td className="py-3 pr-4 text-sm font-semibold text-white">
         {entry.label}
+      </td>
+      <td className="py-3 px-4 text-sm tabular-nums font-semibold text-deribit-blue">
+        {entry.current_iv != null ? `${entry.current_iv.toFixed(2)}%` : "\u2014"}
       </td>
       <td className="py-3 px-4 text-sm tabular-nums">
         <PercentileCell value={entry.iv_percentile} />
@@ -107,6 +112,9 @@ export default function VolStats() {
                     Tenor
                   </th>
                   <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+                    ATM IV
+                  </th>
+                  <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                     IV Pctl
                   </th>
                   <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
@@ -138,11 +146,11 @@ export default function VolStats() {
               </>
             )}
             <span>&middot;</span>
-            <span className="text-deribit-green">&ge;70th</span>
-            <span>= IV rich</span>
+            <span className="text-deribit-red">&ge;70th</span>
+            <span>= IV rich (expensive)</span>
             <span>&middot;</span>
-            <span className="text-deribit-red">&le;30th</span>
-            <span>= IV cheap</span>
+            <span className="text-deribit-green">&le;30th</span>
+            <span>= IV cheap (opportunity)</span>
           </div>
         </>
       )}

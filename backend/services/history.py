@@ -25,6 +25,8 @@ class HistoryStore:
         """Create database directory and table if they don't exist."""
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS iv_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +42,10 @@ class HistoryStore:
             """)
 
     def _connect(self):
-        return sqlite3.connect(self._db_path, check_same_thread=False)
+        conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        return conn
 
     def save_snapshot(self, timestamp, tenor_results):
         """Insert one row per tenor for the current poll cycle.
@@ -67,11 +72,12 @@ class HistoryStore:
             self.cleanup_old()
 
     def get_dod_changes(self):
-        """Get changes for all tenors compared to historical data.
+        """Get changes for all tenors compared to the snapshot closest to 24h ago.
 
-        Strategy: prefer snapshot closest to 24h ago. If no data in the
-        22-26h window, fall back to the oldest available snapshot so that
-        newly-started instances still show useful change data.
+        Strategy: always use the snapshot closest to 24h ago regardless of
+        how far it is from the ideal 24h window. For newly started instances
+        this means comparing to the oldest available snapshot and showing
+        the actual age via change_hours.
 
         Returns:
             Dict mapping tenor label to {
@@ -94,17 +100,36 @@ class HistoryStore:
             ]
 
             for tenor in tenors:
-                # Try: snapshot closest to 24h ago
+                # Find the snapshot closest to 24h ago using indexed range scan
+                # Check a window around the target, expanding if needed
                 row = conn.execute(
                     """
                     SELECT atm_iv, rr_25d, timestamp
                     FROM iv_snapshots
-                    WHERE tenor = ?
+                    WHERE tenor = ? AND timestamp BETWEEN ? AND ?
                     ORDER BY ABS(julianday(timestamp) - julianday(?))
                     LIMIT 1
                     """,
-                    (tenor, target),
+                    (
+                        tenor,
+                        (now - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        (now - timedelta(hours=18)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        target,
+                    ),
                 ).fetchone()
+
+                # If no snapshot in the 18-30h window, use the oldest available
+                if row is None:
+                    row = conn.execute(
+                        """
+                        SELECT atm_iv, rr_25d, timestamp
+                        FROM iv_snapshots
+                        WHERE tenor = ?
+                        ORDER BY timestamp ASC
+                        LIMIT 1
+                        """,
+                        (tenor,),
+                    ).fetchone()
 
                 if row is None:
                     results[tenor] = dict(empty)
@@ -120,33 +145,6 @@ class HistoryStore:
                 except (ValueError, TypeError):
                     results[tenor] = dict(empty)
                     continue
-
-                # If not in the ideal 22-26h window, fall back to oldest snapshot
-                if age_hours < 22 or age_hours > 26:
-                    oldest = conn.execute(
-                        """
-                        SELECT atm_iv, rr_25d, timestamp
-                        FROM iv_snapshots
-                        WHERE tenor = ?
-                        ORDER BY timestamp ASC
-                        LIMIT 1
-                        """,
-                        (tenor,),
-                    ).fetchone()
-
-                    if oldest is None:
-                        results[tenor] = dict(empty)
-                        continue
-
-                    old_iv, old_rr, old_ts = oldest
-                    try:
-                        old_dt = datetime.fromisoformat(
-                            old_ts.replace("Z", "+00:00")
-                        )
-                        age_hours = (now - old_dt).total_seconds() / 3600
-                    except (ValueError, TypeError):
-                        results[tenor] = dict(empty)
-                        continue
 
                 # Need at least 1 minute of history to be meaningful
                 if age_hours < 1 / 60:
@@ -213,10 +211,12 @@ class HistoryStore:
         if not rows:
             return []
 
-        # Uniform downsample if too many points
+        # Uniform downsample if too many points, always keeping the last point
         if len(rows) > max_points:
-            step = len(rows) / max_points
-            rows = [rows[round(i * step)] for i in range(max_points)]
+            step = len(rows) / (max_points - 1)
+            sampled = [rows[round(i * step)] for i in range(max_points - 1)]
+            sampled.append(rows[-1])
+            rows = sampled
 
         result = []
         for ts, atm_iv, rr_25d in rows:
@@ -283,6 +283,7 @@ class HistoryStore:
                 if not rows:
                     results.append({
                         "label": tenor,
+                        "current_iv": None,
                         "iv_high": None, "iv_low": None,
                         "iv_percentile": None, "iv_zscore": None,
                         "samples": 0, "lookback_hours": None,
@@ -299,11 +300,13 @@ class HistoryStore:
                 variance = sum((v - iv_mean) ** 2 for v in values) / n
                 iv_std = math.sqrt(variance) if variance > 0 else 0
 
-                # Percentile: proportion of historical values <= current
-                count_leq = sum(1 for v in values if v <= current_iv)
-                iv_percentile = round(count_leq / n * 100, 1)
+                # Percentile rank: proportion of historical values strictly less
+                # than current. This is the standard convention used by trading
+                # platforms (TastyTrade, Market Chameleon, etc.)
+                count_lt = sum(1 for v in values if v < current_iv)
+                iv_percentile = round(count_lt / n * 100, 1)
 
-                # Z-score
+                # Z-score (population std dev — describes the observed window)
                 iv_zscore = round((current_iv - iv_mean) / iv_std, 2) if iv_std > 0 else None
 
                 # Lookback hours from oldest to now
@@ -316,6 +319,7 @@ class HistoryStore:
 
                 results.append({
                     "label": tenor,
+                    "current_iv": round(current_iv, 2),
                     "iv_high": round(iv_high, 2),
                     "iv_low": round(iv_low, 2),
                     "iv_percentile": iv_percentile,

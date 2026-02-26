@@ -60,10 +60,9 @@ class RiskReversalCalculator:
             nxt_rr = expiry_rr_cache.get(nxt) if nxt else None
 
             if near_rr is not None and nxt_rr is not None:
-                # Variance-time weighted interpolation of RR
+                # Linear interpolation of RR across expiries
                 t1 = expiry_days[near]
                 t2 = expiry_days[nxt]
-                # Extract target_days from label
                 target = self._label_to_days(label)
                 if target and t2 != t1:
                     w = (target - t1) / (t2 - t1)
@@ -191,7 +190,7 @@ class RiskReversalCalculator:
     def _fetch_deltas(self, expiry, strikes, opt_type):
         """Fetch real delta and IV from Deribit ticker for a set of strikes."""
         results = []
-        with ThreadPoolExecutor(max_workers=len(strikes)) as pool:
+        with ThreadPoolExecutor(max_workers=min(len(strikes), 10)) as pool:
             futures = {}
             for strike in strikes:
                 name = format_instrument_name(expiry, strike, opt_type)
@@ -232,7 +231,7 @@ class RiskReversalCalculator:
         try:
             return self._client.get_ticker(instrument_name)
         except Exception:
-            logger.debug("Ticker fetch failed for %s", instrument_name)
+            logger.warning("Ticker fetch failed for %s", instrument_name)
             return None
 
     @staticmethod
@@ -242,6 +241,9 @@ class RiskReversalCalculator:
 
     @staticmethod
     def _label_to_days(label):
-        """Convert tenor label to days."""
-        mapping = {"1W": 7, "2W": 14, "30D": 30, "60D": 60, "90D": 90, "180D": 180}
-        return mapping.get(label)
+        """Convert tenor label to days, derived from config."""
+        from config import TENORS
+        for t in TENORS:
+            if t["label"] == label:
+                return t["days"]
+        return None
