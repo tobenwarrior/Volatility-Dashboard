@@ -10,6 +10,16 @@ export interface TenorData {
   error: string | null;
 }
 
+export interface VolStatsEntry {
+  label: string;
+  iv_high: number | null;
+  iv_low: number | null;
+  iv_percentile: number | null;
+  iv_zscore: number | null;
+  samples: number;
+  lookback_hours: number | null;
+}
+
 export interface TenorResponse {
   timestamp: string;
   spot_price: number;

@@ -233,6 +233,99 @@ class HistoryStore:
 
         return result
 
+    def get_vol_stats(self, hours=None):
+        """Compute volatility statistics for each tenor from historical data.
+
+        Args:
+            hours: Lookback window in hours. None = all available data.
+
+        Returns:
+            List of dicts, one per tenor, with stats fields.
+        """
+        import math
+        from config import TENORS
+
+        tenor_order = {t["label"]: i for i, t in enumerate(TENORS)}
+
+        now = datetime.now(timezone.utc)
+        cutoff = None
+        if hours is not None:
+            cutoff = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        results = []
+
+        with self._connect() as conn:
+            tenors = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT tenor FROM iv_snapshots"
+                ).fetchall()
+            ]
+            tenors.sort(key=lambda t: tenor_order.get(t, 999))
+
+            for tenor in tenors:
+                # Get historical values within the lookback window
+                if cutoff:
+                    rows = conn.execute(
+                        "SELECT atm_iv, timestamp FROM iv_snapshots "
+                        "WHERE tenor = ? AND atm_iv IS NOT NULL AND timestamp >= ? "
+                        "ORDER BY timestamp ASC",
+                        (tenor, cutoff),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT atm_iv, timestamp FROM iv_snapshots "
+                        "WHERE tenor = ? AND atm_iv IS NOT NULL "
+                        "ORDER BY timestamp ASC",
+                        (tenor,),
+                    ).fetchall()
+
+                if not rows:
+                    results.append({
+                        "label": tenor,
+                        "iv_high": None, "iv_low": None,
+                        "iv_percentile": None, "iv_zscore": None,
+                        "samples": 0, "lookback_hours": None,
+                    })
+                    continue
+
+                values = [r[0] for r in rows]
+                current_iv = values[-1]  # most recent value in the window
+                n = len(values)
+
+                iv_high = max(values)
+                iv_low = min(values)
+                iv_mean = sum(values) / n
+                variance = sum((v - iv_mean) ** 2 for v in values) / n
+                iv_std = math.sqrt(variance) if variance > 0 else 0
+
+                # Percentile: proportion of historical values <= current
+                count_leq = sum(1 for v in values if v <= current_iv)
+                iv_percentile = round(count_leq / n * 100, 1)
+
+                # Z-score
+                iv_zscore = round((current_iv - iv_mean) / iv_std, 2) if iv_std > 0 else None
+
+                # Lookback hours from oldest to now
+                try:
+                    oldest_ts = rows[0][1]
+                    oldest_dt = datetime.fromisoformat(oldest_ts.replace("Z", "+00:00"))
+                    lookback_hours = round((now - oldest_dt).total_seconds() / 3600, 1)
+                except (ValueError, TypeError):
+                    lookback_hours = None
+
+                results.append({
+                    "label": tenor,
+                    "iv_high": round(iv_high, 2),
+                    "iv_low": round(iv_low, 2),
+                    "iv_percentile": iv_percentile,
+                    "iv_zscore": iv_zscore,
+                    "samples": n,
+                    "lookback_hours": lookback_hours,
+                })
+
+        return results
+
     def cleanup_old(self, keep_days=None):
         """Delete snapshots older than keep_days to prevent unbounded growth."""
         if keep_days is None:

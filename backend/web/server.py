@@ -34,6 +34,16 @@ def create_app(poller, history_store):
         data = history_store.get_history(tenor, hours)
         return jsonify(data)
 
+    @app.route("/api/vol-stats")
+    def vol_stats():
+        try:
+            hours = float(request.args.get("hours", "0"))
+        except (ValueError, TypeError):
+            hours = 0
+        # 0 means all available data
+        data = history_store.get_vol_stats(hours if hours > 0 else None)
+        return jsonify(data)
+
     @app.route("/api/data")
     def data():
         """Backwards-compatible endpoint — extracts 30D from multi-tenor data."""

@@ -8,6 +8,7 @@ import { useHistory } from "@/hooks/useHistory";
 import StatusBadge from "@/components/StatusBadge";
 import PriceTicker from "@/components/PriceTicker";
 import TenorTable from "@/components/TenorTable";
+import VolStats from "@/components/VolStats";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import { TenorLabel, TimeRange } from "@/types";
@@ -69,6 +70,10 @@ export default function Home() {
         ) : (
           <IvChart data={historyData} tenor={selectedTenor} />
         )}
+      </div>
+
+      <div className="w-full rounded-xl border border-white/[0.08] bg-surface-raised p-6">
+        <VolStats />
       </div>
 
       {data?.timestamp && (
