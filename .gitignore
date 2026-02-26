@@ -6,8 +6,8 @@ dist/
 build/
 
 # SQLite database
-backend/data/
 *.db
+!backend/data/iv_history.db
 
 # Virtual environments
 venv/

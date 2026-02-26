@@ -12,11 +12,12 @@ import {
   type UTCTimestamp,
   type LineData,
 } from "lightweight-charts";
-import { HistoryPoint } from "@/types";
+import { HistoryPoint, TenorData } from "@/types";
 
 interface IvChartProps {
   data: HistoryPoint[];
   tenor: string;
+  tenorData?: TenorData;
 }
 
 function toLineData(
@@ -34,78 +35,81 @@ function toLineData(
 
 const IV_COLOR = "#4d8dff";
 const RR_COLOR = "#21c97e";
+const T1_COLOR = "rgba(255, 255, 255, 0.25)";
 
-export default function IvChart({ data, tenor }: IvChartProps) {
+const CHART_OPTIONS = {
+  layout: {
+    background: { type: ColorType.Solid as const, color: "#161b22" },
+    textColor: "#8b95a5",
+    fontSize: 11,
+  },
+  grid: {
+    vertLines: { color: "rgba(255,255,255,0.04)" },
+    horzLines: { color: "rgba(255,255,255,0.04)" },
+  },
+  crosshair: {
+    vertLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#2d333b" },
+    horzLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#2d333b" },
+  },
+  timeScale: {
+    timeVisible: true,
+    secondsVisible: false,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  rightPriceScale: {
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+};
+
+function SingleChart({
+  data,
+  field,
+  color,
+  label,
+  formatter,
+  height,
+  t1Value,
+}: {
+  data: HistoryPoint[];
+  field: "atm_iv" | "rr_25d";
+  color: string;
+  label: string;
+  formatter: (p: number) => string;
+  height: number;
+  t1Value: number | null;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const ivSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const rrSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const priceLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
 
   // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: "#161b22" },
-        textColor: "#8b95a5",
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
-      },
-      crosshair: {
-        vertLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#2d333b" },
-        horzLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#2d333b" },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        borderColor: "rgba(255,255,255,0.08)",
-      },
-      rightPriceScale: {
-        borderColor: "rgba(255,255,255,0.08)",
-      },
-      leftPriceScale: {
-        visible: true,
-        borderColor: "rgba(255,255,255,0.08)",
-      },
+      ...CHART_OPTIONS,
+      leftPriceScale: { visible: false },
       width: containerRef.current.clientWidth,
-      height: 350,
+      height,
     });
 
-    const ivSeries = chart.addSeries(LineSeries, {
-      color: IV_COLOR,
+    const series = chart.addSeries(LineSeries, {
+      color,
       lineWidth: 2,
       lineStyle: LineStyle.Solid,
       crosshairMarkerVisible: true,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      priceScaleId: "left",
-      priceFormat: {
-        type: "custom",
-        formatter: (p: number) => p.toFixed(2) + "%",
-      },
-    });
-
-    const rrSeries = chart.addSeries(LineSeries, {
-      color: RR_COLOR,
-      lineWidth: 2,
-      lineStyle: LineStyle.Solid,
-      crosshairMarkerVisible: true,
-      lastValueVisible: false,
+      lastValueVisible: true,
       priceLineVisible: false,
       priceScaleId: "right",
       priceFormat: {
         type: "custom",
-        formatter: (p: number) => p.toFixed(2),
+        formatter,
       },
     });
 
     chartRef.current = chart;
-    ivSeriesRef.current = ivSeries;
-    rrSeriesRef.current = rrSeries;
+    seriesRef.current = series;
 
     const el = containerRef.current;
     const observer = new ResizeObserver((entries) => {
@@ -119,36 +123,96 @@ export default function IvChart({ data, tenor }: IvChartProps) {
       observer.disconnect();
       chart.remove();
       chartRef.current = null;
-      ivSeriesRef.current = null;
-      rrSeriesRef.current = null;
+      seriesRef.current = null;
     };
-  }, []);
+  }, [color, formatter, height]);
 
-  // Update data
+  // Update data + T-1 reference line
   useEffect(() => {
-    if (!chartRef.current || !ivSeriesRef.current || !rrSeriesRef.current) return;
+    if (!chartRef.current || !seriesRef.current) return;
 
-    ivSeriesRef.current.setData(toLineData(data, "atm_iv"));
-    rrSeriesRef.current.setData(toLineData(data, "rr_25d"));
+    const lineData = toLineData(data, field);
+    seriesRef.current.setData(lineData);
+
+    // Remove previous T-1 line before adding a new one
+    if (priceLineRef.current && seriesRef.current) {
+      seriesRef.current.removePriceLine(priceLineRef.current);
+      priceLineRef.current = null;
+    }
+
+    if (t1Value != null) {
+      priceLineRef.current = seriesRef.current.createPriceLine({
+        price: t1Value,
+        color: T1_COLOR,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "T-1",
+      });
+    }
+
     chartRef.current.timeScale().fitContent();
-  }, [data]);
+  }, [data, field, t1Value]);
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-5 text-[11px]">
-        <span className="text-xs font-medium uppercase tracking-wider text-deribit-gray">
-          {tenor}
-        </span>
+      <div className="mb-2 flex items-center gap-3 text-[11px]">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: IV_COLOR }} />
-          <span style={{ color: IV_COLOR }}>ATM IV (%)</span>
+          <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: color }} />
+          <span style={{ color }}>{label}</span>
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: RR_COLOR }} />
-          <span style={{ color: RR_COLOR }}>25&Delta; RR</span>
-        </span>
+        {t1Value != null && (
+          <span className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-0 w-4 border-t border-dashed"
+              style={{ borderColor: T1_COLOR }}
+            />
+            <span className="text-white/40">T-1 ({formatter(t1Value)})</span>
+          </span>
+        )}
       </div>
       <div ref={containerRef} className="w-full rounded-lg overflow-hidden" />
+    </div>
+  );
+}
+
+const ivFormatter = (p: number) => p.toFixed(2) + "%";
+const rrFormatter = (p: number) => p.toFixed(2);
+
+export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
+  // Compute T-1 values: current value minus the DoD change = value 24h ago
+  const ivT1 =
+    tenorData?.atm_iv != null && tenorData?.dod_iv_change != null
+      ? tenorData.atm_iv - tenorData.dod_iv_change
+      : null;
+  const rrT1 =
+    tenorData?.rr_25d != null && tenorData?.dod_rr_change != null
+      ? tenorData.rr_25d - tenorData.dod_rr_change
+      : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center text-xs font-medium uppercase tracking-wider text-deribit-gray">
+        {tenor}
+      </div>
+      <SingleChart
+        data={data}
+        field="atm_iv"
+        color={IV_COLOR}
+        label="ATM IV (%)"
+        formatter={ivFormatter}
+        height={200}
+        t1Value={ivT1}
+      />
+      <SingleChart
+        data={data}
+        field="rr_25d"
+        color={RR_COLOR}
+        label="25&Delta; RR"
+        formatter={rrFormatter}
+        height={200}
+        t1Value={rrT1}
+      />
     </div>
   );
 }

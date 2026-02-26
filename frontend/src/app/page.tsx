@@ -58,17 +58,22 @@ export default function Home() {
         </div>
 
         {historyLoading && historyData.length === 0 ? (
-          <div className="flex h-[350px] items-center justify-center">
+          <div className="flex h-[440px] items-center justify-center">
             <p className="text-sm text-white/40">Loading chart data...</p>
           </div>
         ) : historyData.length === 0 ? (
-          <div className="flex h-[350px] items-center justify-center">
+          <div className="flex h-[440px] items-center justify-center">
             <p className="text-sm text-white/40">
               No historical data yet. Charts will appear as data accumulates.
             </p>
           </div>
         ) : (
-          <IvChart data={historyData} tenor={selectedTenor} />
+          <IvChart
+            key={selectedTenor}
+            data={historyData}
+            tenor={selectedTenor}
+            tenorData={data?.tenors?.find((t) => t.label === selectedTenor)}
+          />
         )}
       </div>
 
