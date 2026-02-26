@@ -32,7 +32,7 @@ poller = Poller(
 )
 poller.start()
 
-app = create_app(poller)
+app = create_app(poller, history_store)
 
 if __name__ == "__main__":
     logging.basicConfig(

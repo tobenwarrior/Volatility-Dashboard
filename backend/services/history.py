@@ -188,8 +188,56 @@ class HistoryStore:
 
         return results
 
-    def cleanup_old(self, keep_days=7):
+    def get_history(self, tenor, hours, max_points=350):
+        """Query time-series data for a specific tenor.
+
+        Args:
+            tenor: Tenor label (e.g. "30D").
+            hours: How many hours back to look.
+            max_points: Max data points to return (uniform downsampling).
+
+        Returns:
+            List of dicts with "time" (unix epoch), "atm_iv", "rr_25d".
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT timestamp, atm_iv, rr_25d FROM iv_snapshots "
+                "WHERE tenor = ? AND timestamp >= ? ORDER BY timestamp ASC",
+                (tenor, cutoff),
+            ).fetchall()
+
+        if not rows:
+            return []
+
+        # Uniform downsample if too many points
+        if len(rows) > max_points:
+            step = len(rows) / max_points
+            rows = [rows[round(i * step)] for i in range(max_points)]
+
+        result = []
+        for ts, atm_iv, rr_25d in rows:
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                unix_ts = int(dt.timestamp())
+            except (ValueError, TypeError):
+                continue
+            result.append({
+                "time": unix_ts,
+                "atm_iv": round(atm_iv, 4) if atm_iv is not None else None,
+                "rr_25d": round(rr_25d, 4) if rr_25d is not None else None,
+            })
+
+        return result
+
+    def cleanup_old(self, keep_days=None):
         """Delete snapshots older than keep_days to prevent unbounded growth."""
+        if keep_days is None:
+            from config import HISTORY_KEEP_DAYS
+            keep_days = HISTORY_KEEP_DAYS
         cutoff = (
             datetime.now(timezone.utc) - timedelta(days=keep_days)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")

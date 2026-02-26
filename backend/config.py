@@ -46,3 +46,4 @@ TICKER_CANDIDATES_PER_SIDE = 5  # strikes to check near estimated 25d
 # ---------------------------------------------------------------------------
 import os as _os
 DB_PATH = _os.path.join(_os.path.dirname(__file__), "data", "iv_history.db")
+HISTORY_KEEP_DAYS = 14  # enough for 7D chart + T-1 overlay

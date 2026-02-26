@@ -20,3 +20,19 @@ export interface TenorResponse {
 export interface PriceData {
   price: number | null;
 }
+
+export interface HistoryPoint {
+  time: number;
+  atm_iv: number | null;
+  rr_25d: number | null;
+}
+
+export type TenorLabel = "1W" | "2W" | "30D" | "60D" | "90D" | "180D";
+export type TimeRange = "1H" | "4H" | "24H" | "7D";
+
+export const TIME_RANGE_HOURS: Record<TimeRange, number> = {
+  "1H": 1,
+  "4H": 4,
+  "24H": 24,
+  "7D": 168,
+};
