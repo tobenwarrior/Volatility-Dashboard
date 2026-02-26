@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-deribit-blue: #4d8dff;
+  --color-deribit-blue-hover: #6ba1ff;
+  --color-deribit-green: #21c97e;
+  --color-deribit-red: #f74a73;
+  --color-deribit-gray: #8b95a5;
+  --color-surface: #0d1117;
+  --color-surface-raised: #161b22;
+}
