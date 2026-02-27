@@ -22,8 +22,12 @@ cd Volatility-Estimator
 
 ```bash
 cd backend
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> **macOS note:** macOS does not include `python` — use `python3` and `pip3`, or activate the venv first where `python` works automatically.
 
 ### 3. Frontend
 
@@ -39,6 +43,7 @@ Open two terminals:
 ```bash
 # Terminal 1 — Start the backend (port 5000)
 cd backend
+source venv/bin/activate
 python app.py
 ```
 

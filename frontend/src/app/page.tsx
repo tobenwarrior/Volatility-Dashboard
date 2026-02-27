@@ -9,6 +9,7 @@ import StatusBadge from "@/components/StatusBadge";
 import PriceTicker from "@/components/PriceTicker";
 import TenorTable from "@/components/TenorTable";
 import VolStats from "@/components/VolStats";
+import TermStructureChart from "@/components/TermStructureChart";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import { TenorLabel, TimeRange } from "@/types";
@@ -75,6 +76,13 @@ export default function Home() {
             tenorData={data?.tenors?.find((t) => t.label === selectedTenor)}
           />
         )}
+      </div>
+
+      <div className="w-full rounded-xl border border-white/[0.08] bg-surface-raised p-6">
+        <h2 className="mb-5 text-sm font-medium uppercase tracking-wider text-deribit-gray">
+          ATM IV vs 24h IV Change
+        </h2>
+        <TermStructureChart tenors={data?.tenors} />
       </div>
 
       <div className="w-full rounded-xl border border-white/[0.08] bg-surface-raised p-6">
