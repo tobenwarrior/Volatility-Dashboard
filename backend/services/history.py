@@ -47,6 +47,11 @@ class HistoryStore:
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
+    def checkpoint(self):
+        """Merge WAL into main .db file so the .db is always self-contained."""
+        with self._connect() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
     def save_snapshot(self, timestamp, tenor_results):
         """Insert one row per tenor for the current poll cycle.
 

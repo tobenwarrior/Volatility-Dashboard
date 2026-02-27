@@ -6,6 +6,8 @@ import logging
 import threading
 import time
 
+CHECKPOINT_INTERVAL = 60  # flush WAL to .db every 60 seconds
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +28,7 @@ class Poller:
         self._latest_price = {"price": None}
         self._tenor_lock = threading.Lock()
         self._price_lock = threading.Lock()
+        self._polls_since_checkpoint = 0
 
     def start(self):
         """Launch both daemon polling threads."""
@@ -101,6 +104,12 @@ class Poller:
 
                 computed = sum(1 for t in tenor_list if t["atm_iv"] is not None)
                 logger.info("Poll complete: %d/%d tenors computed", computed, len(self._tenors))
+
+                # Periodically flush WAL so .db file is always self-contained
+                self._polls_since_checkpoint += 1
+                if self._polls_since_checkpoint * self._poll_interval >= CHECKPOINT_INTERVAL:
+                    self._history_store.checkpoint()
+                    self._polls_since_checkpoint = 0
 
             except Exception:
                 logger.exception("Volatility poll failed")
