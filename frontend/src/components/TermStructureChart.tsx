@@ -291,18 +291,23 @@ export default function TermStructureChart({ tenors }: TermStructureChartProps) 
         ))}
 
         {/* Left y-axis labels (ATM IV) — only top and bottom to avoid overlap with dot labels */}
-        {[ivScale.ticks[0], ivScale.ticks[ivScale.ticks.length - 1]].map((t) => (
-          <text
-            key={`ly-${t}`}
-            x={PLOT.left - 8}
-            y={yIv(t) + 3}
-            textAnchor="end"
-            fill={C.gray}
-            fontSize={10}
-          >
-            {t.toFixed(1)}%
-          </text>
-        ))}
+        {(() => {
+          const first = ivScale.ticks[0];
+          const last = ivScale.ticks[ivScale.ticks.length - 1];
+          const labels = first === last ? [first] : [first, last];
+          return labels.map((t, i) => (
+            <text
+              key={`ly-${i}`}
+              x={PLOT.left - 8}
+              y={yIv(t) + 3}
+              textAnchor="end"
+              fill={C.gray}
+              fontSize={10}
+            >
+              {t.toFixed(1)}%
+            </text>
+          ));
+        })()}
 
         {/* Right y-axis labels (IV Change) */}
         {hasChanges &&
