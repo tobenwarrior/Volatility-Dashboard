@@ -203,7 +203,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         color={IV_COLOR}
         label="ATM IV (%)"
         formatter={ivFormatter}
-        height={200}
+        height={160}
         t1Value={ivT1}
       />
       <SingleChart
@@ -212,7 +212,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         color={RR_COLOR}
         label="25&Delta; RR"
         formatter={rrFormatter}
-        height={200}
+        height={160}
         t1Value={rrT1}
       />
     </div>

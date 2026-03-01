@@ -1,19 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TenorResponse } from "@/types";
+import { Asset, TenorResponse } from "@/types";
 
-export function useTenors() {
+export function useTenors(asset: Asset) {
   const [data, setData] = useState<TenorResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
 
     async function fetchData() {
       try {
-        const res = await fetch("/api/tenors");
+        const res = await fetch(`/api/tenors?currency=${asset}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: TenorResponse = await res.json();
         if (active) {
@@ -36,7 +37,7 @@ export function useTenors() {
       active = false;
       clearInterval(id);
     };
-  }, []);
+  }, [asset]);
 
   return { data, error, isLoading };
 }

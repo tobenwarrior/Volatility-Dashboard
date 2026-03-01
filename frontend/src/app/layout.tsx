@@ -7,9 +7,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BTC IV Term Structure Dashboard",
+  title: "IV Term Structure Dashboard",
   description:
-    "Real-time multi-tenor implied volatility and risk reversals for Bitcoin",
+    "Real-time multi-tenor implied volatility and risk reversals for crypto",
 };
 
 export default function RootLayout({

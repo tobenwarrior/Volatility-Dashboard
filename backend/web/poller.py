@@ -15,7 +15,8 @@ class Poller:
     """Manages background threads that poll Deribit for price and volatility data."""
 
     def __init__(self, client, calculator, rr_calculator, history_store,
-                 tenors, poll_interval=5, price_interval=1):
+                 tenors, poll_interval=5, price_interval=1,
+                 currency="BTC", index_name="btc_usd"):
         self._client = client
         self._calculator = calculator
         self._rr_calculator = rr_calculator
@@ -23,6 +24,8 @@ class Poller:
         self._tenors = tenors
         self._poll_interval = poll_interval
         self._price_interval = price_interval
+        self._currency = currency
+        self._index_name = index_name
 
         self._latest_tenor_data = {}
         self._latest_price = {"price": None}
@@ -51,8 +54,8 @@ class Poller:
         """Continuously fetch options and compute multi-tenor vol + RR."""
         while True:
             try:
-                spot = self._client.get_spot_price()
-                options = self._client.get_options()
+                spot = self._client.get_spot_price(self._index_name)
+                options = self._client.get_options(self._currency)
 
                 # 1. Compute ATM IV for all tenors
                 multi = self._calculator.calculate_multi_tenor(
@@ -65,10 +68,11 @@ class Poller:
                     multi["expiry_data"],
                     multi["expiry_days"],
                     multi["tenor_expiries"],
+                    self._currency,
                 )
 
                 # 3. Get DoD changes from history
-                dod_changes = self._history_store.get_dod_changes()
+                dod_changes = self._history_store.get_dod_changes(self._currency)
 
                 # 4. Assemble tenor list
                 tenor_list = []
@@ -90,7 +94,7 @@ class Poller:
                     })
 
                 # 5. Save snapshot to history
-                self._history_store.save_snapshot(multi["timestamp"], tenor_list)
+                self._history_store.save_snapshot(multi["timestamp"], tenor_list, self._currency)
 
                 # 6. Store for API serving
                 result = {
@@ -103,7 +107,7 @@ class Poller:
                     self._latest_tenor_data = result
 
                 computed = sum(1 for t in tenor_list if t["atm_iv"] is not None)
-                logger.info("Poll complete: %d/%d tenors computed", computed, len(self._tenors))
+                logger.info("[%s] Poll complete: %d/%d tenors computed", self._currency, computed, len(self._tenors))
 
                 # Periodically flush WAL so .db file is always self-contained
                 self._polls_since_checkpoint += 1
@@ -119,7 +123,7 @@ class Poller:
         """Continuously fetch spot price."""
         while True:
             try:
-                price = self._client.get_spot_price()
+                price = self._client.get_spot_price(self._index_name)
                 with self._price_lock:
                     self._latest_price = {"price": round(price, 2)}
             except Exception:

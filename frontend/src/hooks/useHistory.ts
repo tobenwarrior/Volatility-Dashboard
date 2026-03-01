@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { HistoryPoint, TenorLabel, TimeRange, TIME_RANGE_HOURS } from "@/types";
+import { Asset, HistoryPoint, TenorLabel, TimeRange, TIME_RANGE_HOURS } from "@/types";
 
 interface UseHistoryResult {
   data: HistoryPoint[];
@@ -9,7 +9,7 @@ interface UseHistoryResult {
   error: string | null;
 }
 
-export function useHistory(tenor: TenorLabel, range: TimeRange): UseHistoryResult {
+export function useHistory(tenor: TenorLabel, range: TimeRange, asset: Asset): UseHistoryResult {
   const [data, setData] = useState<HistoryPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function useHistory(tenor: TenorLabel, range: TimeRange): UseHistoryResul
   const fetchHistory = useCallback(async () => {
     const hours = TIME_RANGE_HOURS[range];
     try {
-      const res = await fetch(`/api/history?tenor=${tenor}&hours=${hours}`);
+      const res = await fetch(`/api/history?tenor=${tenor}&hours=${hours}&currency=${asset}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: HistoryPoint[] = await res.json();
       setData(json);
@@ -27,7 +27,7 @@ export function useHistory(tenor: TenorLabel, range: TimeRange): UseHistoryResul
     } finally {
       setIsLoading(false);
     }
-  }, [tenor, range]);
+  }, [tenor, range, asset]);
 
   useEffect(() => {
     setIsLoading(true);

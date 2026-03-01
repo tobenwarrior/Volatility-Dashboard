@@ -12,21 +12,21 @@ class DeribitClient:
         self._base_url = base_url
         self._timeout = timeout
 
-    def get_spot_price(self):
-        """Fetch the current BTC/USD index price."""
+    def get_spot_price(self, index_name="btc_usd"):
+        """Fetch the current index price for the given asset."""
         resp = requests.get(
             f"{self._base_url}/public/get_index_price",
-            params={"index_name": "btc_usd"},
+            params={"index_name": index_name},
             timeout=self._timeout,
         )
         resp.raise_for_status()
         return float(resp.json()["result"]["index_price"])
 
-    def get_options(self):
-        """Fetch all active BTC inverse option book summaries."""
+    def get_options(self, currency="BTC"):
+        """Fetch all active inverse option book summaries for the given currency."""
         resp = requests.get(
             f"{self._base_url}/public/get_book_summary_by_currency",
-            params={"currency": "BTC", "kind": "option"},
+            params={"currency": currency, "kind": "option"},
             timeout=self._timeout,
         )
         resp.raise_for_status()

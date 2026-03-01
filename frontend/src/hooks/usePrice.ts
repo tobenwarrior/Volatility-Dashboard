@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Asset } from "@/types";
 
-export function usePrice() {
+export function usePrice(asset: Asset) {
   const [price, setPrice] = useState<number | null>(null);
   const [prevPrice, setPrevPrice] = useState<number | null>(null);
   const [stale, setStale] = useState(false);
@@ -11,10 +12,16 @@ export function usePrice() {
 
   useEffect(() => {
     let active = true;
+    // Reset on asset switch
+    prevRef.current = null;
+    setPrice(null);
+    setPrevPrice(null);
+    setStale(false);
+    failCount.current = 0;
 
     async function fetchPrice() {
       try {
-        const res = await fetch("/api/price");
+        const res = await fetch(`/api/price?currency=${asset}`);
         if (!res.ok) {
           failCount.current++;
           if (failCount.current >= 5) setStale(true);
@@ -41,7 +48,7 @@ export function usePrice() {
       active = false;
       clearInterval(id);
     };
-  }, []);
+  }, [asset]);
 
   return { price, prevPrice, stale };
 }

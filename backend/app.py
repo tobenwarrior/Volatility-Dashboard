@@ -9,6 +9,7 @@ import logging
 from config import (
     DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL,
     TARGET_DAYS, TENORS, DB_PATH, TARGET_DELTA, TICKER_CANDIDATES_PER_SIDE,
+    ASSETS,
 )
 from api.client import DeribitClient
 from services.volatility import VolatilityCalculator
@@ -17,7 +18,7 @@ from services.history import HistoryStore
 from web.poller import Poller
 from web.server import create_app
 
-# --- Dependency injection ---
+# --- Shared dependencies ---
 client = DeribitClient(base_url=DERIBIT_BASE, timeout=REQUEST_TIMEOUT)
 calculator = VolatilityCalculator(target_days=TARGET_DAYS)
 rr_calculator = RiskReversalCalculator(
@@ -26,13 +27,20 @@ rr_calculator = RiskReversalCalculator(
     candidates_per_side=TICKER_CANDIDATES_PER_SIDE,
 )
 history_store = HistoryStore(db_path=DB_PATH)
-poller = Poller(
-    client, calculator, rr_calculator, history_store,
-    TENORS, POLL_INTERVAL, PRICE_INTERVAL,
-)
-poller.start()
 
-app = create_app(poller, history_store)
+# --- One poller per asset ---
+pollers = {}
+for currency, asset_cfg in ASSETS.items():
+    poller = Poller(
+        client, calculator, rr_calculator, history_store,
+        TENORS, POLL_INTERVAL, PRICE_INTERVAL,
+        currency=currency,
+        index_name=asset_cfg["index_name"],
+    )
+    poller.start()
+    pollers[currency] = poller
+
+app = create_app(pollers, history_store)
 
 if __name__ == "__main__":
     logging.basicConfig(

@@ -38,6 +38,7 @@ export interface HistoryPoint {
   rr_25d: number | null;
 }
 
+export type Asset = "BTC" | "ETH";
 export type TenorLabel = "1W" | "2W" | "30D" | "60D" | "90D" | "180D";
 export type TimeRange = "1H" | "4H" | "24H" | "7D";
 

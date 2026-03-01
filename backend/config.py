@@ -12,6 +12,14 @@ TICKER_URL = f"{DERIBIT_BASE}/public/ticker"
 REQUEST_TIMEOUT = 10  # seconds
 
 # ---------------------------------------------------------------------------
+# Supported assets
+# ---------------------------------------------------------------------------
+ASSETS = {
+    "BTC": {"index_name": "btc_usd", "currency": "BTC"},
+    "ETH": {"index_name": "eth_usd", "currency": "ETH"},
+}
+
+# ---------------------------------------------------------------------------
 # Polling intervals
 # ---------------------------------------------------------------------------
 POLL_INTERVAL = 5   # seconds — full option chain + vol calc

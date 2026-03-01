@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { VolStatsEntry, TimeRange } from "@/types";
+import { Asset, VolStatsEntry, TimeRange } from "@/types";
 import { useVolStats } from "@/hooks/useVolStats";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 
@@ -74,9 +74,9 @@ function StatsRow({ entry }: { entry: VolStatsEntry }) {
   );
 }
 
-export default function VolStats() {
+export default function VolStats({ asset }: { asset: Asset }) {
   const [range, setRange] = useState<TimeRange>("7D");
-  const { data, isLoading } = useVolStats(range);
+  const { data, isLoading } = useVolStats(range, asset);
 
   const hasStats = data.length > 0 && data.some((e) => e.iv_percentile != null);
 

@@ -14,16 +14,16 @@ _MONTHS = {
 
 _MONTH_NAMES = {v: k for k, v in _MONTHS.items()}
 
-# BTC-6MAR26-70000-C  or  BTC-28MAR25-90000-P
+# BTC-6MAR26-70000-C  or  ETH-28MAR25-4000-P
 _INSTRUMENT_RE = re.compile(
-    r"^BTC-(\d{1,2})([A-Z]{3})(\d{2})-(\d+)-([CP])$"
+    r"^(?:BTC|ETH)-(\d{1,2})([A-Z]{3})(\d{2})-(\d+)-([CP])$"
 )
 
 
 def parse_instrument_name(name):
     """Parse a Deribit instrument name into an OptionData (without mark_iv).
 
-    Returns None if the name doesn't match the expected BTC option format.
+    Returns None if the name doesn't match the expected option format.
     Expiry is set to 08:00 UTC (Deribit settlement time).
     """
     m = _INSTRUMENT_RE.match(name)
@@ -40,17 +40,18 @@ def parse_instrument_name(name):
     return OptionData(expiry=expiry, strike=strike, opt_type=opt_type, mark_iv=0.0)
 
 
-def format_instrument_name(expiry_dt, strike, opt_type):
+def format_instrument_name(currency, expiry_dt, strike, opt_type):
     """Build a Deribit instrument name from components.
 
     Args:
+        currency: "BTC" or "ETH".
         expiry_dt: Expiry as a datetime object.
         strike: Strike price (int or float).
         opt_type: "C" or "P".
 
     Returns:
-        String like "BTC-27MAR26-70000-C".
+        String like "BTC-27MAR26-70000-C" or "ETH-27MAR26-4000-C".
     """
     month_str = _MONTH_NAMES[expiry_dt.month]
     year_str = str(expiry_dt.year % 100)
-    return f"BTC-{expiry_dt.day}{month_str}{year_str}-{int(strike)}-{opt_type}"
+    return f"{currency}-{expiry_dt.day}{month_str}{year_str}-{int(strike)}-{opt_type}"

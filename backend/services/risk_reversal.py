@@ -23,14 +23,15 @@ class RiskReversalCalculator:
         self._target_delta = target_delta
         self._candidates = candidates_per_side
 
-    def calculate(self, spot, expiry_data, expiry_days, tenor_expiries):
+    def calculate(self, spot, expiry_data, expiry_days, tenor_expiries, currency="BTC"):
         """Compute 25d RR for each tenor.
 
         Args:
-            spot: Current BTC spot price.
+            spot: Current spot price.
             expiry_data: {expiry_datetime: {strike: {"C": iv, "P": iv}}}.
             expiry_days: {expiry_datetime: days_to_expiry}.
             tenor_expiries: {tenor_label: (near_expiry, next_expiry)}.
+            currency: "BTC" or "ETH".
 
         Returns:
             Dict mapping tenor_label to rr_25d float (or None).
@@ -49,7 +50,7 @@ class RiskReversalCalculator:
             if expiry not in expiry_data or expiry not in expiry_days:
                 continue
             rr = self._rr_at_expiry(
-                spot, expiry, expiry_data[expiry], expiry_days[expiry]
+                spot, expiry, expiry_data[expiry], expiry_days[expiry], currency
             )
             expiry_rr_cache[expiry] = rr
 
@@ -78,7 +79,7 @@ class RiskReversalCalculator:
 
         return results
 
-    def _rr_at_expiry(self, spot, expiry, strikes_data, days):
+    def _rr_at_expiry(self, spot, expiry, strikes_data, days, currency="BTC"):
         """Compute the 25d risk reversal at a single expiry.
 
         Returns:
@@ -120,15 +121,15 @@ class RiskReversalCalculator:
             return None
 
         # Fetch real deltas in batches, expanding search if we don't bracket 0.25
-        put_25d_iv = self._find_25d_iv(expiry, put_all_strikes, "P")
-        call_25d_iv = self._find_25d_iv(expiry, call_all_strikes, "C")
+        put_25d_iv = self._find_25d_iv(expiry, put_all_strikes, "P", currency)
+        call_25d_iv = self._find_25d_iv(expiry, call_all_strikes, "C", currency)
 
         if put_25d_iv is None or call_25d_iv is None:
             return None
 
         return call_25d_iv - put_25d_iv
 
-    def _find_25d_iv(self, expiry, ranked_strikes, opt_type):
+    def _find_25d_iv(self, expiry, ranked_strikes, opt_type, currency="BTC"):
         """Fetch real deltas in batches until we bracket 0.25, then interpolate.
 
         Strikes are pre-sorted by approx delta closeness to 0.25. We fetch
@@ -139,6 +140,7 @@ class RiskReversalCalculator:
             expiry: Expiry datetime.
             ranked_strikes: All OTM strikes sorted by approx delta closeness to 0.25.
             opt_type: "C" or "P".
+            currency: "BTC" or "ETH".
 
         Returns:
             Interpolated IV at target delta, or None.
@@ -152,7 +154,7 @@ class RiskReversalCalculator:
             batch = ranked_strikes[start:start + batch_size]
 
             # Fetch tickers in parallel
-            new_results = self._fetch_deltas(expiry, batch, opt_type)
+            new_results = self._fetch_deltas(expiry, batch, opt_type, currency)
             all_results.extend(new_results)
 
             # Try to bracket 0.25 with everything we have so far
@@ -187,13 +189,13 @@ class RiskReversalCalculator:
 
         return None
 
-    def _fetch_deltas(self, expiry, strikes, opt_type):
+    def _fetch_deltas(self, expiry, strikes, opt_type, currency="BTC"):
         """Fetch real delta and IV from Deribit ticker for a set of strikes."""
         results = []
         with ThreadPoolExecutor(max_workers=min(len(strikes), 10)) as pool:
             futures = {}
             for strike in strikes:
-                name = format_instrument_name(expiry, strike, opt_type)
+                name = format_instrument_name(currency, expiry, strike, opt_type)
                 futures[pool.submit(self._safe_get_ticker, name)] = strike
 
             for future in as_completed(futures):

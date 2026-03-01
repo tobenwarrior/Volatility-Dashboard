@@ -22,7 +22,7 @@ class HistoryStore:
         self._cleanup_counter = 0
 
     def _ensure_db(self):
-        """Create database directory and table if they don't exist."""
+        """Create database directory and table if they don't exist, and migrate schema."""
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
@@ -33,12 +33,21 @@ class HistoryStore:
                     timestamp TEXT NOT NULL,
                     tenor TEXT NOT NULL,
                     atm_iv REAL,
-                    rr_25d REAL
+                    rr_25d REAL,
+                    currency TEXT NOT NULL DEFAULT 'BTC'
                 )
             """)
+            # Migrate: add currency column if missing (existing data tagged as BTC)
+            columns = [
+                row[1] for row in conn.execute("PRAGMA table_info(iv_snapshots)")
+            ]
+            if "currency" not in columns:
+                conn.execute(
+                    "ALTER TABLE iv_snapshots ADD COLUMN currency TEXT NOT NULL DEFAULT 'BTC'"
+                )
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_snapshots_tenor_ts
-                ON iv_snapshots(tenor, timestamp)
+                CREATE INDEX IF NOT EXISTS idx_snapshots_currency_tenor_ts
+                ON iv_snapshots(currency, tenor, timestamp)
             """)
 
     def _connect(self):
@@ -52,21 +61,22 @@ class HistoryStore:
         with self._connect() as conn:
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
-    def save_snapshot(self, timestamp, tenor_results):
+    def save_snapshot(self, timestamp, tenor_results, currency="BTC"):
         """Insert one row per tenor for the current poll cycle.
 
         Args:
             timestamp: ISO timestamp string.
             tenor_results: List of dicts with "label", "atm_iv", "rr_25d".
+            currency: "BTC" or "ETH".
         """
         rows = [
-            (timestamp, t["label"], t.get("atm_iv"), t.get("rr_25d"))
+            (timestamp, t["label"], t.get("atm_iv"), t.get("rr_25d"), currency)
             for t in tenor_results
         ]
         with self._connect() as conn:
             conn.executemany(
-                "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d, currency) "
+                "VALUES (?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -76,13 +86,16 @@ class HistoryStore:
             self._cleanup_counter = 0
             self.cleanup_old()
 
-    def get_dod_changes(self):
+    def get_dod_changes(self, currency="BTC"):
         """Get changes for all tenors compared to the snapshot closest to 24h ago.
 
         Strategy: always use the snapshot closest to 24h ago regardless of
         how far it is from the ideal 24h window. For newly started instances
         this means comparing to the oldest available snapshot and showing
         the actual age via change_hours.
+
+        Args:
+            currency: "BTC" or "ETH".
 
         Returns:
             Dict mapping tenor label to {
@@ -100,7 +113,8 @@ class HistoryStore:
             tenors = [
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT tenor FROM iv_snapshots"
+                    "SELECT DISTINCT tenor FROM iv_snapshots WHERE currency = ?",
+                    (currency,),
                 ).fetchall()
             ]
 
@@ -111,11 +125,12 @@ class HistoryStore:
                     """
                     SELECT atm_iv, rr_25d, timestamp
                     FROM iv_snapshots
-                    WHERE tenor = ? AND timestamp BETWEEN ? AND ?
+                    WHERE currency = ? AND tenor = ? AND timestamp BETWEEN ? AND ?
                     ORDER BY ABS(julianday(timestamp) - julianday(?))
                     LIMIT 1
                     """,
                     (
+                        currency,
                         tenor,
                         (now - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                         (now - timedelta(hours=18)).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -129,11 +144,11 @@ class HistoryStore:
                         """
                         SELECT atm_iv, rr_25d, timestamp
                         FROM iv_snapshots
-                        WHERE tenor = ?
+                        WHERE currency = ? AND tenor = ?
                         ORDER BY timestamp ASC
                         LIMIT 1
                         """,
-                        (tenor,),
+                        (currency, tenor),
                     ).fetchone()
 
                 if row is None:
@@ -161,11 +176,11 @@ class HistoryStore:
                     """
                     SELECT atm_iv, rr_25d
                     FROM iv_snapshots
-                    WHERE tenor = ?
+                    WHERE currency = ? AND tenor = ?
                     ORDER BY timestamp DESC
                     LIMIT 1
                     """,
-                    (tenor,),
+                    (currency, tenor),
                 ).fetchone()
 
                 if latest is None:
@@ -191,12 +206,13 @@ class HistoryStore:
 
         return results
 
-    def get_history(self, tenor, hours, max_points=350):
+    def get_history(self, tenor, hours, currency="BTC", max_points=350):
         """Query time-series data for a specific tenor.
 
         Args:
             tenor: Tenor label (e.g. "30D").
             hours: How many hours back to look.
+            currency: "BTC" or "ETH".
             max_points: Max data points to return (uniform downsampling).
 
         Returns:
@@ -209,8 +225,8 @@ class HistoryStore:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT timestamp, atm_iv, rr_25d FROM iv_snapshots "
-                "WHERE tenor = ? AND timestamp >= ? ORDER BY timestamp ASC",
-                (tenor, cutoff),
+                "WHERE currency = ? AND tenor = ? AND timestamp >= ? ORDER BY timestamp ASC",
+                (currency, tenor, cutoff),
             ).fetchall()
 
         if not rows:
@@ -238,11 +254,12 @@ class HistoryStore:
 
         return result
 
-    def get_vol_stats(self, hours=None):
+    def get_vol_stats(self, hours=None, currency="BTC"):
         """Compute volatility statistics for each tenor from historical data.
 
         Args:
             hours: Lookback window in hours. None = all available data.
+            currency: "BTC" or "ETH".
 
         Returns:
             List of dicts, one per tenor, with stats fields.
@@ -263,7 +280,8 @@ class HistoryStore:
             tenors = [
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT tenor FROM iv_snapshots"
+                    "SELECT DISTINCT tenor FROM iv_snapshots WHERE currency = ?",
+                    (currency,),
                 ).fetchall()
             ]
             tenors.sort(key=lambda t: tenor_order.get(t, 999))
@@ -273,16 +291,16 @@ class HistoryStore:
                 if cutoff:
                     rows = conn.execute(
                         "SELECT atm_iv, timestamp FROM iv_snapshots "
-                        "WHERE tenor = ? AND atm_iv IS NOT NULL AND timestamp >= ? "
+                        "WHERE currency = ? AND tenor = ? AND atm_iv IS NOT NULL AND timestamp >= ? "
                         "ORDER BY timestamp ASC",
-                        (tenor, cutoff),
+                        (currency, tenor, cutoff),
                     ).fetchall()
                 else:
                     rows = conn.execute(
                         "SELECT atm_iv, timestamp FROM iv_snapshots "
-                        "WHERE tenor = ? AND atm_iv IS NOT NULL "
+                        "WHERE currency = ? AND tenor = ? AND atm_iv IS NOT NULL "
                         "ORDER BY timestamp ASC",
-                        (tenor,),
+                        (currency, tenor),
                     ).fetchall()
 
                 if not rows:
