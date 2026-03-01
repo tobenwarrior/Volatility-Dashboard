@@ -181,7 +181,7 @@ class RiskReversalCalculator:
 
         # Exhausted all strikes — no bracket exists in the entire chain
         if all_results:
-            logger.warning(
+            logger.debug(
                 "Expiry %s %s: searched all %d strikes, could not bracket 0.25 (deltas: %s)",
                 expiry.strftime("%d%b%y"), opt_type, len(all_results),
                 [round(r[0], 4) for r in sorted(all_results, key=lambda r: r[0])],
@@ -233,7 +233,7 @@ class RiskReversalCalculator:
         try:
             return self._client.get_ticker(instrument_name)
         except Exception:
-            logger.warning("Ticker fetch failed for %s", instrument_name)
+            logger.debug("Ticker fetch failed for %s", instrument_name)
             return None
 
     @staticmethod
