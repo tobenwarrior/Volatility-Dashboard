@@ -27,10 +27,14 @@ function toLineData(
   field: "atm_iv" | "rr_25d"
 ): LineData<UTCTimestamp>[] {
   const out: LineData<UTCTimestamp>[] = [];
+  let prevTime = -1;
   for (const point of raw) {
     const value = point[field];
     if (value == null) continue;
-    out.push({ time: (point.time + SGT_OFFSET) as UTCTimestamp, value });
+    const t = point.time + SGT_OFFSET;
+    if (t <= prevTime) continue; // skip duplicate/non-ascending timestamps
+    prevTime = t;
+    out.push({ time: t as UTCTimestamp, value });
   }
   return out;
 }
