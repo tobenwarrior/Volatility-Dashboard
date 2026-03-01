@@ -8,6 +8,8 @@ build/
 # SQLite database
 *.db
 !backend/data/iv_history.db
+!backend/data/iv_history.db-wal
+!backend/data/iv_history.db-shm
 
 # Virtual environments
 venv/
