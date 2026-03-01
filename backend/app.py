@@ -5,6 +5,8 @@ Wires together all dependencies and starts the Flask server.
 """
 
 import logging
+import os
+import socket
 
 from config import (
     DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL,
@@ -17,6 +19,22 @@ from services.risk_reversal import RiskReversalCalculator
 from services.history import HistoryStore
 from web.poller import Poller
 from web.server import create_app
+
+BASE_PORT = 5000
+PORT_FILE = os.path.join(os.path.dirname(__file__), ".port")
+
+
+def find_free_port(start=BASE_PORT, attempts=10):
+    """Return the first available port starting from *start*."""
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("0.0.0.0", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"No free port found in range {start}-{start + attempts - 1}")
+
 
 # --- Shared dependencies ---
 client = DeribitClient(base_url=DERIBIT_BASE, timeout=REQUEST_TIMEOUT)
@@ -47,4 +65,10 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = find_free_port()
+    # Write port so the frontend proxy can pick it up
+    with open(PORT_FILE, "w") as f:
+        f.write(str(port))
+    if port != BASE_PORT:
+        logging.info("Port %d in use — falling back to %d", BASE_PORT, port)
+    app.run(host="0.0.0.0", port=port, debug=False)

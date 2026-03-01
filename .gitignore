@@ -11,6 +11,9 @@ build/
 *.db-shm
 !backend/data/iv_history.db
 
+# Runtime port file
+backend/.port
+
 # Virtual environments
 venv/
 .venv/

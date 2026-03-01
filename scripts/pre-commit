@@ -1,0 +1,7 @@
+#!/bin/bash
+# Auto-flush SQLite WAL before commit so the .db file has all data
+DB="backend/data/iv_history.db"
+if [ -f "$DB" ]; then
+    python3 -c "import sqlite3; sqlite3.connect('$DB').execute('PRAGMA wal_checkpoint(TRUNCATE)')" 2>/dev/null
+    git add "$DB" 2>/dev/null
+fi
