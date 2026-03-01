@@ -25,7 +25,7 @@ class HistoryStore:
         """Create database directory and table if they don't exist, and migrate schema."""
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         with self._connect() as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA journal_mode=DELETE")
             conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS iv_snapshots (
@@ -52,14 +52,9 @@ class HistoryStore:
 
     def _connect(self):
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA journal_mode=DELETE")
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
-
-    def checkpoint(self):
-        """Merge WAL into main .db file so the .db is always self-contained."""
-        with self._connect() as conn:
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def save_snapshot(self, timestamp, tenor_results, currency="BTC"):
         """Insert one row per tenor for the current poll cycle.

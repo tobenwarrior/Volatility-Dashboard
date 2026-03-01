@@ -7,8 +7,6 @@ build/
 
 # SQLite database
 *.db
-*.db-wal
-*.db-shm
 !backend/data/iv_history.db
 
 # Runtime port file
