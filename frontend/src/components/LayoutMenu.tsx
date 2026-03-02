@@ -13,108 +13,128 @@ interface LayoutMenuProps {
   onChange: (sections: Section[]) => void;
 }
 
-const ITEM_H = 36; // row height in px (py-2 + content)
+const ITEM_H = 36;
 
 export default function LayoutMenu({ sections, onChange }: LayoutMenuProps) {
   const [open, setOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
+  const [dragY, setDragY] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
-  const itemEls = useRef<Map<string, HTMLDivElement>>(new Map());
-  const prevRects = useRef<Map<string, number>>(new Map());
-  const originY = useRef(0);
-  const originIdx = useRef(0);
+  const itemEls = useRef(new Map<string, HTMLDivElement>());
+  const flipTops = useRef(new Map<string, number>());
+  const startY = useRef(0);
+  const startIdx = useRef(0);
+
+  // Refs to avoid stale closures in document listeners
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const dragIdRef = useRef<string | null>(null);
+  useEffect(() => { dragIdRef.current = dragId; }, [dragId]);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
   const toggle = (id: string) => {
-    onChange(
-      sections.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s))
-    );
+    onChange(sections.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)));
   };
 
-  // Snapshot Y positions before reorder
-  const snapshot = useCallback(() => {
+  // Capture true layout positions for FLIP (clear in-flight transitions first)
+  const capturePositions = useCallback(() => {
     const m = new Map<string, number>();
-    itemEls.current.forEach((el, id) => m.set(id, el.getBoundingClientRect().top));
-    prevRects.current = m;
+    itemEls.current.forEach((el, id) => {
+      if (id === dragIdRef.current) return;
+      el.style.transition = "none";
+      el.style.transform = "none";
+      void el.offsetHeight;
+      m.set(id, el.getBoundingClientRect().top);
+    });
+    flipTops.current = m;
   }, []);
 
-  // FLIP: animate non-dragged items from old → new position
+  // FLIP: animate non-dragged items from old position to new
   useLayoutEffect(() => {
-    const prev = prevRects.current;
+    const prev = flipTops.current;
     if (prev.size === 0) return;
+    flipTops.current = new Map();
 
     itemEls.current.forEach((el, id) => {
-      if (id === dragId) return;
+      if (id === dragIdRef.current) return;
       const oldTop = prev.get(id);
       if (oldTop === undefined) return;
-      const newTop = el.getBoundingClientRect().top;
-      const dy = oldTop - newTop;
-      if (Math.abs(dy) < 1) return;
-
-      el.style.transform = `translateY(${dy}px)`;
       el.style.transition = "none";
-      void el.offsetHeight; // force reflow
-      el.style.transform = "";
+      el.style.transform = "none";
+      void el.offsetHeight;
+      const newTop = el.getBoundingClientRect().top;
+      const delta = oldTop - newTop;
+      if (Math.abs(delta) < 1) return;
+      el.style.transform = `translateY(${delta}px)`;
+      void el.offsetHeight;
       el.style.transition = "transform 150ms ease-out";
+      el.style.transform = "translateY(0)";
     });
+  }, [sections]);
 
-    prevRects.current = new Map();
-  }, [sections, dragId]);
-
-  // Pointer-based drag
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent, idx: number, id: string) => {
-      e.preventDefault();
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      setDragId(id);
-      setDragOffset(0);
-      originY.current = e.clientY;
-      originIdx.current = idx;
-    },
-    []
-  );
-
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (dragId === null) return;
-      const dy = e.clientY - originY.current;
-      setDragOffset(dy);
-
-      const curIdx = sections.findIndex((s) => s.id === dragId);
-      const newIdx = Math.max(
-        0,
-        Math.min(sections.length - 1, originIdx.current + Math.round(dy / ITEM_H))
-      );
-      if (newIdx !== curIdx) {
-        snapshot();
-        const next = [...sections];
-        const [moved] = next.splice(curIdx, 1);
-        next.splice(newIdx, 0, moved);
-        onChange(next);
-        // Adjust origin so offset stays consistent after reorder
-        originY.current += (newIdx - curIdx) * ITEM_H;
-        setDragOffset(e.clientY - originY.current);
-      }
-    },
-    [dragId, sections, onChange, snapshot]
-  );
-
-  const onPointerUp = useCallback(() => {
-    setDragId(null);
-    setDragOffset(0);
+  // Pointer down on drag handle
+  const handlePointerDown = useCallback((e: React.PointerEvent, idx: number, id: string) => {
+    e.preventDefault();
+    setDragId(id);
+    setDragY(0);
+    startY.current = e.clientY;
+    startIdx.current = idx;
   }, []);
+
+  // Document-level pointer tracking during drag
+  useEffect(() => {
+    if (dragId === null) return;
+
+    const onMove = (e: PointerEvent) => {
+      const id = dragIdRef.current;
+      if (!id) return;
+
+      const rawDy = e.clientY - startY.current;
+      setDragY(rawDy);
+
+      const secs = sectionsRef.current;
+      const curIdx = secs.findIndex((s) => s.id === id);
+      const targetIdx = Math.max(
+        0,
+        Math.min(secs.length - 1, startIdx.current + Math.round(rawDy / ITEM_H))
+      );
+
+      if (targetIdx !== curIdx) {
+        capturePositions();
+        const next = [...secs];
+        const [moved] = next.splice(curIdx, 1);
+        next.splice(targetIdx, 0, moved);
+        onChangeRef.current(next);
+        // Compensate so dragged item stays under pointer
+        startY.current += (targetIdx - curIdx) * ITEM_H;
+        startIdx.current = targetIdx;
+        setDragY(e.clientY - startY.current);
+      }
+    };
+
+    const onUp = () => {
+      setDragId(null);
+      setDragY(0);
+    };
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    };
+  }, [dragId, capturePositions]);
 
   const setItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) itemEls.current.set(id, el);
@@ -156,9 +176,11 @@ export default function LayoutMenu({ sections, onChange }: LayoutMenuProps) {
               <div
                 key={section.id}
                 ref={(el) => setItemRef(section.id, el)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                style={isDragging ? { transform: `translateY(${dragOffset}px)`, zIndex: 10 } : undefined}
+                style={
+                  isDragging
+                    ? { transform: `translateY(${dragY}px)`, zIndex: 10, position: "relative" }
+                    : undefined
+                }
                 className={`flex select-none items-center gap-2 rounded-lg px-2 py-2 ${
                   isDragging
                     ? "scale-[1.02] bg-white/[0.08] shadow-lg"
@@ -172,7 +194,7 @@ export default function LayoutMenu({ sections, onChange }: LayoutMenuProps) {
                   viewBox="0 0 24 24"
                   fill="currentColor"
                   className="shrink-0 cursor-grab text-white/20 active:cursor-grabbing"
-                  onPointerDown={(e) => onPointerDown(e, i, section.id)}
+                  onPointerDown={(e) => handlePointerDown(e, i, section.id)}
                 >
                   <circle cx="9" cy="5" r="1.5" />
                   <circle cx="15" cy="5" r="1.5" />
