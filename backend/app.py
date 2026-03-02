@@ -11,12 +11,15 @@ import socket
 from config import (
     DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL,
     TARGET_DAYS, TENORS, DB_PATH, TARGET_DELTA, TICKER_CANDIDATES_PER_SIDE,
-    ASSETS,
+    ASSETS, DERIBIT_WS_URL, WS_SPOT_STALE_SECONDS,
 )
 from api.client import DeribitClient
 from services.volatility import VolatilityCalculator
 from services.risk_reversal import RiskReversalCalculator
 from services.history import HistoryStore
+from ws.ticker_store import TickerDataStore
+from ws.client import DeribitWSClient
+from ws.subscription_manager import SubscriptionManager
 from web.poller import Poller
 from web.server import create_app
 
@@ -39,10 +42,25 @@ def find_free_port(start=BASE_PORT, attempts=10):
 # --- Shared dependencies ---
 client = DeribitClient(base_url=DERIBIT_BASE, timeout=REQUEST_TIMEOUT)
 calculator = VolatilityCalculator(target_days=TARGET_DAYS)
-rr_calculator = RiskReversalCalculator(
-    client,
+
+# --- WebSocket infrastructure ---
+ticker_store = TickerDataStore()
+ws_client = DeribitWSClient(ticker_store, url=DERIBIT_WS_URL)
+ws_client.start()
+
+# Subscribe to spot price channels for all assets
+spot_channels = [f"deribit_price_index.{cfg['index_name']}" for cfg in ASSETS.values()]
+ws_client.subscribe(spot_channels)
+
+subscription_manager = SubscriptionManager(
+    ws_client,
     target_delta=TARGET_DELTA,
     candidates_per_side=TICKER_CANDIDATES_PER_SIDE,
+)
+
+rr_calculator = RiskReversalCalculator(
+    target_delta=TARGET_DELTA,
+    ticker_store=ticker_store,
 )
 history_store = HistoryStore(db_path=DB_PATH)
 
@@ -54,6 +72,9 @@ for currency, asset_cfg in ASSETS.items():
         TENORS, POLL_INTERVAL, PRICE_INTERVAL,
         currency=currency,
         index_name=asset_cfg["index_name"],
+        ticker_store=ticker_store,
+        subscription_manager=subscription_manager,
+        ws_spot_stale_seconds=WS_SPOT_STALE_SECONDS,
     )
     poller.start()
     pollers[currency] = poller

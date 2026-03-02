@@ -7,7 +7,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "IV Term Structure Dashboard",
+  title: "Volatility Dashboard",
   description:
     "Real-time multi-tenor implied volatility and risk reversals for crypto",
 };

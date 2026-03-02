@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, Fragment } from "react";
 import dynamic from "next/dynamic";
 import { useAssetData } from "@/hooks/useAssetData";
 import StatusBadge from "@/components/StatusBadge";
@@ -9,57 +10,31 @@ import VolStats from "@/components/VolStats";
 import TermStructureChart from "@/components/TermStructureChart";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
+import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
+
+const DEFAULT_SECTIONS: Section[] = [
+  { id: "term-structure", label: "IV Term Structure", visible: true },
+  { id: "iv-change", label: "ATM IV vs 24h Change", visible: true },
+  { id: "historical", label: "Historical Charts", visible: true },
+  { id: "vol-stats", label: "Vol Stats", visible: true },
+];
 
 export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
 
-  return (
-    <main className="mx-auto min-h-screen max-w-[1920px] px-4 py-4 lg:px-6 lg:py-5">
-      <header className="mb-5 flex items-center gap-4">
-        <h1 className="text-base font-semibold tracking-tight text-white">
-          Volatility Dashboard
-        </h1>
-        <div className="ml-auto flex items-center gap-2">
-          {btc.data?.timestamp && (
-            <span className="hidden text-xs text-white/30 lg:inline">
-              Last updated{" "}
-              <span className="tabular-nums">
-                {new Date(btc.data.timestamp).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
-              </span>
-            </span>
-          )}
-          <StatusBadge isLoading={btc.isLoading} error={btc.error || eth.error} />
-        </div>
-      </header>
+  const assets = [
+    { asset: "BTC" as const, d: btc },
+    { asset: "ETH" as const, d: eth },
+  ];
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-5">
-        {/* Row 1: Column headers */}
-        {[
-          { asset: "BTC" as const, d: btc },
-          { asset: "ETH" as const, d: eth },
-        ].map(({ asset, d }) => (
-          <div key={`header-${asset}`}>
-            <PriceTicker
-              price={d.price}
-              prevPrice={d.prevPrice}
-              stale={d.stale}
-              asset={asset}
-            />
-          </div>
-        ))}
-
-        {/* Row 2: IV Term Structure */}
-        {[
-          { asset: "BTC" as const, d: btc },
-          { asset: "ETH" as const, d: eth },
-        ].map(({ asset, d }) => (
+  const renderSection = (id: string) => {
+    switch (id) {
+      case "term-structure":
+        return assets.map(({ asset, d }) => (
           <div
             key={`tenor-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
@@ -69,13 +44,10 @@ export default function Home() {
             </h3>
             <TenorTable tenors={d.data?.tenors} />
           </div>
-        ))}
+        ));
 
-        {/* Row 3: ATM IV vs 24h IV Change */}
-        {[
-          { asset: "BTC" as const, d: btc },
-          { asset: "ETH" as const, d: eth },
-        ].map(({ asset, d }) => (
+      case "iv-change":
+        return assets.map(({ asset, d }) => (
           <div
             key={`chart-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
@@ -85,13 +57,10 @@ export default function Home() {
             </h3>
             <TermStructureChart tenors={d.data?.tenors} />
           </div>
-        ))}
+        ));
 
-        {/* Row 4: Historical Charts */}
-        {[
-          { asset: "BTC" as const, d: btc },
-          { asset: "ETH" as const, d: eth },
-        ].map(({ asset, d }) => (
+      case "historical":
+        return assets.map(({ asset, d }) => (
           <div
             key={`history-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
@@ -135,20 +104,63 @@ export default function Home() {
               />
             )}
           </div>
-        ))}
+        ));
 
-        {/* Row 5: Volatility Statistics */}
-        {[
-          { asset: "BTC" as const },
-          { asset: "ETH" as const },
-        ].map(({ asset }) => (
+      case "vol-stats":
+        return assets.map(({ asset }) => (
           <div
             key={`stats-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
           >
             <VolStats asset={asset} />
           </div>
+        ));
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <main className="mx-auto min-h-screen max-w-[1920px] px-4 py-4 lg:px-6 lg:py-5">
+      <header className="mb-5 flex items-center gap-4">
+        <LayoutMenu sections={sections} onChange={setSections} />
+        <div className="ml-auto flex items-center gap-2">
+          {btc.data?.timestamp && (
+            <span className="hidden text-xs text-white/30 lg:inline">
+              Last updated{" "}
+              <span className="tabular-nums">
+                {new Date(btc.data.timestamp).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}
+              </span>
+            </span>
+          )}
+          <StatusBadge isLoading={btc.isLoading} error={btc.error || eth.error} />
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-5">
+        {/* Price headers — always visible */}
+        {assets.map(({ asset, d }) => (
+          <div key={`header-${asset}`}>
+            <PriceTicker
+              price={d.price}
+              prevPrice={d.prevPrice}
+              stale={d.stale}
+              asset={asset}
+            />
+          </div>
         ))}
+
+        {/* Dynamic sections */}
+        {sections
+          .filter((s) => s.visible)
+          .map((s) => (
+            <Fragment key={s.id}>{renderSection(s.id)}</Fragment>
+          ))}
       </div>
     </main>
   );

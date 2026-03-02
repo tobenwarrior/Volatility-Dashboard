@@ -14,7 +14,9 @@ class Poller:
 
     def __init__(self, client, calculator, rr_calculator, history_store,
                  tenors, poll_interval=5, price_interval=1,
-                 currency="BTC", index_name="btc_usd"):
+                 currency="BTC", index_name="btc_usd",
+                 ticker_store=None, subscription_manager=None,
+                 ws_spot_stale_seconds=5):
         self._client = client
         self._calculator = calculator
         self._rr_calculator = rr_calculator
@@ -24,6 +26,9 @@ class Poller:
         self._price_interval = price_interval
         self._currency = currency
         self._index_name = index_name
+        self._ticker_store = ticker_store
+        self._subscription_manager = subscription_manager
+        self._ws_spot_stale = ws_spot_stale_seconds
 
         self._latest_tenor_data = {}
         self._latest_price = {"price": None}
@@ -47,17 +52,33 @@ class Poller:
         with self._price_lock:
             return dict(self._latest_price)
 
+    def _get_spot_price(self):
+        """Get spot price, preferring WebSocket if available and fresh."""
+        if self._ticker_store:
+            ws_price = self._ticker_store.get_spot_price(self._index_name)
+            age = self._ticker_store.get_spot_age_seconds(self._index_name)
+            if ws_price is not None and age < self._ws_spot_stale:
+                return ws_price
+        return self._client.get_spot_price(self._index_name)
+
     def _poll_volatility(self):
         """Continuously fetch options and compute multi-tenor vol + RR."""
         while True:
             try:
-                spot = self._client.get_spot_price(self._index_name)
+                spot = self._get_spot_price()
                 options = self._client.get_options(self._currency)
 
                 # 1. Compute ATM IV for all tenors
                 multi = self._calculator.calculate_multi_tenor(
                     spot, options, self._tenors
                 )
+
+                # 1b. Update WebSocket subscriptions for RR-relevant tickers
+                if self._subscription_manager:
+                    self._subscription_manager.update_subscriptions(
+                        self._currency, spot,
+                        multi["expiry_data"], multi["expiry_days"],
+                    )
 
                 # 2. Compute 25d RR for all tenors
                 rr_results = self._rr_calculator.calculate(
@@ -112,10 +133,10 @@ class Poller:
             time.sleep(self._poll_interval)
 
     def _poll_price(self):
-        """Continuously fetch spot price."""
+        """Continuously update spot price, preferring WebSocket data."""
         while True:
             try:
-                price = self._client.get_spot_price(self._index_name)
+                price = self._get_spot_price()
                 with self._price_lock:
                     self._latest_price = {"price": round(price, 2)}
             except Exception:

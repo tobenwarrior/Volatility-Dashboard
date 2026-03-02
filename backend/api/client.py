@@ -32,12 +32,3 @@ class DeribitClient:
         resp.raise_for_status()
         return resp.json()["result"]
 
-    def get_ticker(self, instrument_name):
-        """Fetch ticker data (including greeks) for a specific instrument."""
-        resp = requests.get(
-            f"{self._base_url}/public/ticker",
-            params={"instrument_name": instrument_name},
-            timeout=self._timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()["result"]

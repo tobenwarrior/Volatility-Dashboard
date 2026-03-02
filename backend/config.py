@@ -8,7 +8,6 @@ Central configuration for the Volatility Estimator.
 DERIBIT_BASE = "https://www.deribit.com/api/v2"
 INDEX_URL = f"{DERIBIT_BASE}/public/get_index_price"
 BOOK_URL = f"{DERIBIT_BASE}/public/get_book_summary_by_currency"
-TICKER_URL = f"{DERIBIT_BASE}/public/ticker"
 REQUEST_TIMEOUT = 10  # seconds
 
 # ---------------------------------------------------------------------------
@@ -47,7 +46,13 @@ TENORS = [
 # Risk reversal
 # ---------------------------------------------------------------------------
 TARGET_DELTA = 0.25
-TICKER_CANDIDATES_PER_SIDE = 5  # strikes to check near estimated 25d
+TICKER_CANDIDATES_PER_SIDE = 5  # strikes to subscribe near estimated 25d
+
+# ---------------------------------------------------------------------------
+# WebSocket
+# ---------------------------------------------------------------------------
+DERIBIT_WS_URL = "wss://www.deribit.com/ws/api/v2"
+WS_SPOT_STALE_SECONDS = 5  # fall back to REST if WS spot older than this
 
 # ---------------------------------------------------------------------------
 # History database

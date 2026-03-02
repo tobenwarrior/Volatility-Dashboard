@@ -270,14 +270,50 @@ class VolatilityCalculator:
         ).to_dict()
 
     @staticmethod
-    def _get_atm_iv(strikes_data, spot):
-        """Find the ATM strike closest to spot and return averaged Put/Call IV."""
+    def _strike_iv(ivs):
+        """Average valid call/put IVs for a single strike."""
+        call_iv = ivs.get("C")
+        put_iv = ivs.get("P")
+        valid = [v for v in (call_iv, put_iv) if v is not None and v > 0]
+        return sum(valid) / len(valid) if valid else None
+
+    def _get_atm_iv(self, strikes_data, spot):
+        """Compute ATM IV by interpolating between the two nearest strikes.
+
+        When spot sits between two strikes, a pure closest-strike approach
+        flips discretely as spot crosses the midpoint, causing chart jitter.
+        Instead, linearly interpolate IV between the two nearest strikes
+        weighted by distance to spot.
+        """
         sorted_strikes = sorted(strikes_data.keys(), key=lambda s: abs(s - spot))
+
+        # Collect the two nearest strikes with valid IV
+        candidates = []
         for strike in sorted_strikes:
-            ivs = strikes_data[strike]
-            call_iv = ivs.get("C")
-            put_iv = ivs.get("P")
-            valid = [v for v in (call_iv, put_iv) if v is not None and v > 0]
-            if valid:
-                return strike, sum(valid) / len(valid)
-        return None, None
+            iv = self._strike_iv(strikes_data[strike])
+            if iv is not None:
+                candidates.append((strike, iv))
+                if len(candidates) == 2:
+                    break
+
+        if not candidates:
+            return None, None
+        if len(candidates) == 1:
+            return candidates[0]
+
+        s1, iv1 = candidates[0]
+        s2, iv2 = candidates[1]
+
+        # If spot is exactly on a strike, just use that strike
+        if s1 == spot:
+            return s1, iv1
+
+        # Linear interpolation weighted by inverse distance
+        d1 = abs(spot - s1)
+        d2 = abs(spot - s2)
+        total = d1 + d2
+        w1 = 1.0 - d1 / total  # closer strike gets more weight
+        w2 = 1.0 - d2 / total
+        iv = w1 * iv1 + w2 * iv2
+
+        return s1, iv

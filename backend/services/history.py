@@ -121,6 +121,7 @@ class HistoryStore:
                     SELECT atm_iv, rr_25d, timestamp
                     FROM iv_snapshots
                     WHERE currency = ? AND tenor = ? AND timestamp BETWEEN ? AND ?
+                      AND atm_iv IS NOT NULL AND rr_25d IS NOT NULL
                     ORDER BY ABS(julianday(timestamp) - julianday(?))
                     LIMIT 1
                     """,
@@ -141,6 +142,7 @@ class HistoryStore:
                         SELECT atm_iv, rr_25d, timestamp
                         FROM iv_snapshots
                         WHERE currency = ? AND tenor = ? AND timestamp >= ?
+                          AND atm_iv IS NOT NULL AND rr_25d IS NOT NULL
                         ORDER BY timestamp ASC
                         LIMIT 1
                         """,
