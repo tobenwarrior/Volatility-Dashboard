@@ -18,6 +18,7 @@ interface IvChartProps {
   data: HistoryPoint[];
   tenor: string;
   tenorData?: TenorData;
+  resetCounter?: number;
 }
 
 const SGT_OFFSET = 8 * 3600; // UTC+8
@@ -75,6 +76,7 @@ function SingleChart({
   formatter,
   height,
   t1Value,
+  resetCounter,
 }: {
   data: HistoryPoint[];
   field: "atm_iv" | "rr_25d";
@@ -83,6 +85,7 @@ function SingleChart({
   formatter: (p: number) => string;
   height: number;
   t1Value: number | null;
+  resetCounter: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -134,6 +137,13 @@ function SingleChart({
       initialFitDone.current = false;
     };
   }, [color, formatter, height]);
+
+  // Reset zoom (fit full range)
+  useEffect(() => {
+    if (resetCounter > 0 && chartRef.current) {
+      chartRef.current.timeScale().fitContent();
+    }
+  }, [resetCounter]);
 
   // Update data + T-1 reference line
   useEffect(() => {
@@ -190,12 +200,9 @@ function SingleChart({
 const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
-export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
+export default function IvChart({ data, tenor, tenorData, resetCounter = 0 }: IvChartProps) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center text-xs font-medium uppercase tracking-wider text-deribit-gray">
-        {tenor}
-      </div>
       <SingleChart
         data={data}
         field="atm_iv"
@@ -204,6 +211,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         formatter={ivFormatter}
         height={160}
         t1Value={null}
+        resetCounter={resetCounter}
       />
       <SingleChart
         data={data}
@@ -213,6 +221,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         formatter={rrFormatter}
         height={160}
         t1Value={null}
+        resetCounter={resetCounter}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useCallback, Fragment } from "react";
 import dynamic from "next/dynamic";
 import { useAssetData } from "@/hooks/useAssetData";
 import StatusBadge from "@/components/StatusBadge";
@@ -25,6 +25,10 @@ export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
+  const resetZoom = useCallback((asset: string) => {
+    setResetCounters((prev) => ({ ...prev, [asset]: (prev[asset] ?? 0) + 1 }));
+  }, []);
 
   const assets = [
     { asset: "BTC" as const, d: btc },
@@ -66,9 +70,21 @@ export default function Home() {
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
           >
             <div className="mb-4 space-y-3">
-              <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
-                Historical Charts
-              </h3>
+              <div className="flex items-center">
+                <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
+                  Historical Charts
+                </h3>
+                <button
+                  onClick={() => resetZoom(asset)}
+                  title="Reset zoom"
+                  className="ml-auto flex items-center justify-center rounded-md bg-white/[0.06] px-2.5 py-1.5 text-deribit-gray transition-colors hover:bg-white/[0.1] hover:text-white"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                  </svg>
+                </button>
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <TenorSelector
                   selected={d.selectedTenor}
@@ -101,6 +117,7 @@ export default function Home() {
                 tenorData={d.data?.tenors?.find(
                   (t) => t.label === d.selectedTenor
                 )}
+                resetCounter={resetCounters[asset] ?? 0}
               />
             )}
           </div>
