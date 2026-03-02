@@ -133,17 +133,22 @@ class HistoryStore:
                     ),
                 ).fetchone()
 
-                # If no snapshot in the 18-30h window, use the oldest available
+                # If no snapshot in the 18-30h window, use the oldest snapshot
+                # from the last 24h (the start of recent continuous data)
                 if row is None:
                     row = conn.execute(
                         """
                         SELECT atm_iv, rr_25d, timestamp
                         FROM iv_snapshots
-                        WHERE currency = ? AND tenor = ?
+                        WHERE currency = ? AND tenor = ? AND timestamp >= ?
                         ORDER BY timestamp ASC
                         LIMIT 1
                         """,
-                        (currency, tenor),
+                        (
+                            currency,
+                            tenor,
+                            target,
+                        ),
                     ).fetchone()
 
                 if row is None:

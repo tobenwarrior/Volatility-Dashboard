@@ -49,6 +49,8 @@ class VolatilityCalculator:
         expiry_days = {}
         for expiry in expiry_data:
             days = (expiry - now).total_seconds() / 86400.0
+            if days <= 0:
+                continue  # skip expired options
             if days > self._min_expiry_days:
                 expiry_days[expiry] = days
 

@@ -88,6 +88,7 @@ function SingleChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const priceLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
+  const initialFitDone = useRef(false);
 
   // Create chart once
   useEffect(() => {
@@ -130,6 +131,7 @@ function SingleChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      initialFitDone.current = false;
     };
   }, [color, formatter, height]);
 
@@ -157,7 +159,10 @@ function SingleChart({
       });
     }
 
-    chartRef.current.timeScale().fitContent();
+    if (!initialFitDone.current) {
+      chartRef.current.timeScale().fitContent();
+      initialFitDone.current = true;
+    }
   }, [data, field, t1Value]);
 
   return (
@@ -186,16 +191,6 @@ const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
 export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
-  // Compute T-1 values: current value minus the DoD change = value 24h ago
-  const ivT1 =
-    tenorData?.atm_iv != null && tenorData?.dod_iv_change != null
-      ? tenorData.atm_iv - tenorData.dod_iv_change
-      : null;
-  const rrT1 =
-    tenorData?.rr_25d != null && tenorData?.dod_rr_change != null
-      ? tenorData.rr_25d - tenorData.dod_rr_change
-      : null;
-
   return (
     <div className="space-y-4">
       <div className="flex items-center text-xs font-medium uppercase tracking-wider text-deribit-gray">
@@ -208,7 +203,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         label="ATM IV (%)"
         formatter={ivFormatter}
         height={160}
-        t1Value={ivT1}
+        t1Value={null}
       />
       <SingleChart
         data={data}
@@ -217,7 +212,7 @@ export default function IvChart({ data, tenor, tenorData }: IvChartProps) {
         label="25&Delta; RR"
         formatter={rrFormatter}
         height={160}
-        t1Value={rrT1}
+        t1Value={null}
       />
     </div>
   );
