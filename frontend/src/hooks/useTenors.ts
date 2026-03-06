@@ -31,7 +31,7 @@ export function useTenors(asset: Asset) {
     }
 
     fetchData();
-    const id = setInterval(fetchData, 5000);
+    const id = setInterval(fetchData, 60_000);
 
     return () => {
       active = false;

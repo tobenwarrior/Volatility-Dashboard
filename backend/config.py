@@ -21,8 +21,8 @@ ASSETS = {
 # ---------------------------------------------------------------------------
 # Polling intervals
 # ---------------------------------------------------------------------------
-POLL_INTERVAL = 5   # seconds — full option chain + vol calc
-PRICE_INTERVAL = 1  # seconds — spot price only
+POLL_INTERVAL = 60  # seconds — full option chain + vol calc
+PRICE_INTERVAL = 5  # seconds — spot price only (reads WebSocket, no REST cost)
 
 # ---------------------------------------------------------------------------
 # Volatility calculation

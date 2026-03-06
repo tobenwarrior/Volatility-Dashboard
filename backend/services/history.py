@@ -75,9 +75,9 @@ class HistoryStore:
                 rows,
             )
 
-        # Periodic cleanup (every ~720 saves ≈ once per hour at 5s intervals)
+        # Periodic cleanup (every ~60 saves ≈ once per hour at 60s intervals)
         self._cleanup_counter += 1
-        if self._cleanup_counter >= 720:
+        if self._cleanup_counter >= 60:
             self._cleanup_counter = 0
             self.cleanup_old()
 

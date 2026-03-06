@@ -32,7 +32,7 @@ export function useVolStats(range: TimeRange, asset: Asset): UseVolStatsResult {
   useEffect(() => {
     setIsLoading(true);
     fetchStats();
-    const id = setInterval(fetchStats, 10_000);
+    const id = setInterval(fetchStats, 60_000);
     return () => clearInterval(id);
   }, [fetchStats]);
 

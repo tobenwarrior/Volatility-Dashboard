@@ -32,7 +32,7 @@ export function useHistory(tenor: TenorLabel, range: TimeRange, asset: Asset): U
   useEffect(() => {
     setIsLoading(true);
     fetchHistory();
-    const id = setInterval(fetchHistory, 30_000);
+    const id = setInterval(fetchHistory, 60_000);
     return () => clearInterval(id);
   }, [fetchHistory]);
 
