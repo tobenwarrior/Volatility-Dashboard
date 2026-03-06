@@ -56,19 +56,6 @@ npm run dev
 Open http://localhost:3000 in your browser. Data begins populating immediately.
 
 ---
-
-## What This Does
-
-Options traders need a clean view of the vol surface — how implied volatility and skew behave across different time horizons. This tool provides that by:
-
-- Pulling live **inverse (coin-margined)** BTC option data from Deribit's public API
-- Computing **ATM IV** for 6 tenors (1W, 2W, 30D, 60D, 90D, 180D) using variance interpolation across expiries that bracket each target
-- Computing **25-delta risk reversals** (call IV − put IV) by approximating Black-Scholes delta per strike, interpolating to find the 25-delta point on each side
-- Tracking **day-over-day changes** in both IV and skew
-- Storing history in SQLite and serving it via API for charting
-
-Results update every 5 seconds and are displayed on a Next.js dashboard with interactive historical charts.
-
 ## Dashboard Features
 
 - **Term structure table** — ATM IV, 25Δ RR, IV change, and skew change for all tenors
