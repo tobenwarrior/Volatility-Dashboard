@@ -55,8 +55,6 @@ DERIBIT_WS_URL = "wss://www.deribit.com/ws/api/v2"
 WS_SPOT_STALE_SECONDS = 5  # fall back to REST if WS spot older than this
 
 # ---------------------------------------------------------------------------
-# History database
+# History database (Postgres via DATABASE_URL env var)
 # ---------------------------------------------------------------------------
-import os as _os
-DB_PATH = _os.path.join(_os.path.dirname(__file__), "data", "iv_history.db")
 HISTORY_KEEP_DAYS = 14  # enough for 7D chart + T-1 overlay

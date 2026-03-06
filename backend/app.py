@@ -9,7 +9,7 @@ import os
 
 from config import (
     DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL,
-    TARGET_DAYS, TENORS, DB_PATH, TARGET_DELTA, TICKER_CANDIDATES_PER_SIDE,
+    TARGET_DAYS, TENORS, TARGET_DELTA, TICKER_CANDIDATES_PER_SIDE,
     ASSETS, DERIBIT_WS_URL, WS_SPOT_STALE_SECONDS,
 )
 from api.client import DeribitClient
@@ -48,7 +48,7 @@ rr_calculator = RiskReversalCalculator(
     target_delta=TARGET_DELTA,
     ticker_store=ticker_store,
 )
-history_store = HistoryStore(db_path=DB_PATH)
+history_store = HistoryStore()
 
 # --- One poller per asset ---
 pollers = {}
