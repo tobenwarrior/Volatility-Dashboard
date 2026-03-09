@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useCallback, Fragment } from "react";
+import { useState, useCallback, useEffect, Fragment } from "react";
 import dynamic from "next/dynamic";
 import { useAssetData } from "@/hooks/useAssetData";
 import StatusBadge from "@/components/StatusBadge";
 import PriceTicker from "@/components/PriceTicker";
 import TenorTable from "@/components/TenorTable";
-import VolStats from "@/components/VolStats";
-import TermStructureChart from "@/components/TermStructureChart";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
+const TermStructureChart = dynamic(() => import("@/components/TermStructureChart"), {
+  loading: () => <p className="py-10 text-center text-sm text-white/40">Loading...</p>,
+});
+const VolStats = dynamic(() => import("@/components/VolStats"), {
+  loading: () => <p className="text-sm text-white/40">Loading...</p>,
+});
 
 const DEFAULT_SECTIONS: Section[] = [
   { id: "term-structure", label: "IV Term Structure", visible: true },
@@ -21,11 +25,15 @@ const DEFAULT_SECTIONS: Section[] = [
   { id: "vol-stats", label: "Vol Stats", visible: true },
 ];
 
+const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-stats"]);
+
 export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
   const resetZoom = useCallback((asset: string) => {
     setResetCounters((prev) => ({ ...prev, [asset]: (prev[asset] ?? 0) + 1 }));
   }, []);
@@ -111,7 +119,7 @@ export default function Home() {
               </div>
             ) : (
               <IvChart
-                key={`${asset}-${d.selectedTenor}`}
+                key={`${asset}-${d.selectedTenor}-${d.selectedRange}`}
                 data={d.historyData}
                 tenor={d.selectedTenor}
                 tenorData={d.data?.tenors?.find(
@@ -174,7 +182,7 @@ export default function Home() {
 
         {/* Dynamic sections */}
         {sections
-          .filter((s) => s.visible)
+          .filter((s) => s.visible && (!DEFERRED_SECTIONS.has(s.id) || ready))
           .map((s) => (
             <Fragment key={s.id}>{renderSection(s.id)}</Fragment>
           ))}

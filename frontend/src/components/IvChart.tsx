@@ -91,7 +91,6 @@ function SingleChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const priceLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
-  const initialFitDone = useRef(false);
 
   // Create chart once
   useEffect(() => {
@@ -134,8 +133,7 @@ function SingleChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
-      initialFitDone.current = false;
-    };
+};
   }, [color, formatter, height]);
 
   // Reset zoom (fit full range)
@@ -169,10 +167,7 @@ function SingleChart({
       });
     }
 
-    if (!initialFitDone.current) {
-      chartRef.current.timeScale().fitContent();
-      initialFitDone.current = true;
-    }
+    chartRef.current.timeScale().fitContent();
   }, [data, field, t1Value]);
 
   return (

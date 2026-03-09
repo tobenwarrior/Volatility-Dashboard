@@ -66,13 +66,13 @@ function TenorRow({ tenor }: { tenor: TenorData }) {
           ? `${tenor.rr_25d > 0 ? "+" : ""}${tenor.rr_25d.toFixed(2)}`
           : "\u2014"}
       </td>
-      <td className="py-3 px-4 text-sm tabular-nums text-white/70">
+      <td className="py-3 px-4 text-sm tabular-nums">
+        <SkewChange value={tenor.dod_rr_change} hours={tenor.change_hours} />
+      </td>
+      <td className="py-3 pl-4 text-sm tabular-nums text-white/70">
         {tenor.rr_25d != null && tenor.atm_iv != null && tenor.atm_iv !== 0
           ? `${(tenor.rr_25d / tenor.atm_iv).toFixed(3)}`
           : "\u2014"}
-      </td>
-      <td className="py-3 pl-4 text-sm tabular-nums">
-        <SkewChange value={tenor.dod_rr_change} hours={tenor.change_hours} />
       </td>
     </tr>
   );
@@ -102,10 +102,10 @@ export default function TenorTable({ tenors }: TenorTableProps) {
                 25&Delta; RR
               </th>
               <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                Norm RR
+                Skew Chg
               </th>
               <th className="pb-3 pl-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                Skew Chg
+                Norm RR
               </th>
             </tr>
           </thead>
