@@ -42,7 +42,7 @@ export function usePrice(asset: Asset) {
     }
 
     fetchPrice();
-    const id = setInterval(fetchPrice, 5_000);
+    const id = setInterval(fetchPrice, 15_000);
 
     return () => {
       active = false;
