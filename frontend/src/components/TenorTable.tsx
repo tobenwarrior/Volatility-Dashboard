@@ -52,24 +52,24 @@ function SkewChange({ value, hours }: { value: number | null; hours: number | nu
 function TenorRow({ tenor }: { tenor: TenorData }) {
   return (
     <tr className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors">
-      <td className="py-3 pr-4 text-sm font-semibold text-white">
+      <td className="py-3 text-sm font-semibold text-white">
         {tenor.label}
       </td>
-      <td className="py-3 px-4 text-sm tabular-nums font-semibold text-deribit-blue">
+      <td className="py-3 text-sm tabular-nums font-semibold text-deribit-blue">
         {tenor.atm_iv != null ? `${tenor.atm_iv.toFixed(2)}%` : "\u2014"}
       </td>
-      <td className="py-3 px-4 text-sm tabular-nums">
+      <td className="py-3 text-sm tabular-nums">
         <IvChange value={tenor.dod_iv_change} hours={tenor.change_hours} />
       </td>
-      <td className="py-3 px-4 text-sm tabular-nums text-white">
+      <td className="py-3 text-sm tabular-nums text-white">
         {tenor.rr_25d != null
           ? `${tenor.rr_25d > 0 ? "+" : ""}${tenor.rr_25d.toFixed(2)}`
           : "\u2014"}
       </td>
-      <td className="py-3 px-4 text-sm tabular-nums">
+      <td className="py-3 text-sm tabular-nums">
         <SkewChange value={tenor.dod_rr_change} hours={tenor.change_hours} />
       </td>
-      <td className="py-3 pl-4 text-sm tabular-nums text-white/70">
+      <td className="py-3 text-sm tabular-nums text-white/70">
         {tenor.rr_25d != null && tenor.atm_iv != null && tenor.atm_iv !== 0
           ? `${(tenor.rr_25d / tenor.atm_iv).toFixed(3)}`
           : "\u2014"}
@@ -86,25 +86,25 @@ export default function TenorTable({ tenors }: TenorTableProps) {
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
+        <table className="w-full table-fixed text-left">
           <thead>
             <tr className="border-b border-white/[0.08]">
-              <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 Tenor
               </th>
-              <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 ATM IV
               </th>
-              <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 IV Chg
               </th>
-              <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 25&Delta; RR
               </th>
-              <th className="pb-3 px-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 Skew Chg
               </th>
-              <th className="pb-3 pl-4 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 Norm RR
               </th>
             </tr>
