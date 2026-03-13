@@ -2,7 +2,6 @@
 Flask application factory — JSON-only API (no HTML).
 """
 
-from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -66,9 +65,9 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
                 )
                 if rv_series:
                     for point in data:
-                        dt = datetime.fromtimestamp(point["time"], tz=timezone.utc)
-                        hour_key = dt.strftime("%Y-%m-%d %H")
-                        rv_val = rv_series.get(hour_key)
+                        # Floor to hour (match Binance candle open times)
+                        hour_ts = point["time"] // 3600 * 3600
+                        rv_val = rv_series.get(hour_ts)
                         if rv_val is not None:
                             point["rv"] = rv_val
 

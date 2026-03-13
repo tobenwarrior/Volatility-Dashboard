@@ -111,8 +111,7 @@ class RealizedVolCalculator:
     def get_rolling_series(self, perp_name, tenor_days):
         """Compute rolling hourly RV for the given tenor, with caching.
 
-        Returns a dict mapping "YYYY-MM-DD HH" to RV value — one entry
-        per hour so the overlay line updates smoothly.
+        Returns a dict mapping hour-floored unix timestamp (int) to RV value.
         """
         currency = perp_name.split("-")[0] if perp_name else "BTC"
         cache_key = (currency, tenor_days)
@@ -127,6 +126,8 @@ class RealizedVolCalculator:
         n_returns = tenor_days * 24  # hourly returns for the window
 
         if len(candles) < n_returns + 2:
+            logger.warning("Not enough candles for %s %dD RV: have %d, need %d",
+                           currency, tenor_days, len(candles), n_returns + 2)
             return {}
 
         closes = [c["close"] for c in candles]
@@ -139,17 +140,17 @@ class RealizedVolCalculator:
             else:
                 log_returns.append(0.0)
 
-        # Rolling RV: slide by 1 hour
+        # Rolling RV: slide by 1 hour, key by unix timestamp floored to hour
         results = {}
         for end in range(n_returns, len(log_returns) + 1):
             window = log_returns[end - n_returns:end]
             mean = sum(window) / len(window)
             variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
             rv = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR) * 100
-            # times[end] is the candle that completes this window
-            dt = datetime.fromtimestamp(times[end] / 1000, tz=timezone.utc)
-            key = dt.strftime("%Y-%m-%d %H")
-            results[key] = round(rv, 4)
+            # Key: candle open time floored to hour (unix seconds)
+            hour_ts = times[end] // 3600000 * 3600
+            results[hour_ts] = round(rv, 4)
 
+        logger.info("Rolling RV for %s %dD: %d hourly values", currency, tenor_days, len(results))
         self._rolling_cache[cache_key] = (now, results)
         return results
