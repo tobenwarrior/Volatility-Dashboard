@@ -56,22 +56,26 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
         hours = max(0.01, min(hours, 744.0))
         data = history_store.get_history(tenor, hours, currency)
 
-        # Merge rolling RV time series (hourly) into history points
-        if rv_calculator and assets and tenor in tenor_days_map:
-            perp_name = assets.get(currency, {}).get("perp_name")
-            if perp_name:
-                rv_series = rv_calculator.get_rolling_series(
-                    perp_name, tenor_days_map[tenor]
-                )
-                if rv_series:
-                    for point in data:
-                        # Floor to hour (match Binance candle open times)
-                        hour_ts = point["time"] // 3600 * 3600
-                        rv_val = rv_series.get(hour_ts)
-                        if rv_val is not None:
-                            point["rv"] = rv_val
-
         return jsonify(data)
+
+    @app.route("/api/rv-series")
+    def rv_series():
+        """Return rolling hourly RV time series from Binance 1h candles."""
+        currency = _get_currency()
+        if currency is None:
+            return jsonify({"error": "Invalid currency"}), 400
+        tenor = request.args.get("tenor", "30D")
+        if tenor not in tenor_days_map:
+            return jsonify({"error": f"Invalid tenor: {tenor}"}), 400
+        if not rv_calculator or not assets:
+            return jsonify([])
+        perp_name = assets.get(currency, {}).get("perp_name")
+        if not perp_name:
+            return jsonify([])
+        series = rv_calculator.get_rolling_series(perp_name, tenor_days_map[tenor])
+        # Return as sorted list of {time, rv} objects
+        result = [{"time": ts, "rv": rv} for ts, rv in sorted(series.items())]
+        return jsonify(result)
 
     @app.route("/api/vol-stats")
     def vol_stats():

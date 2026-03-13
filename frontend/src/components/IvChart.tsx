@@ -12,21 +12,22 @@ import {
   type UTCTimestamp,
   type LineData,
 } from "lightweight-charts";
-import { HistoryPoint, TenorData } from "@/types";
+import { HistoryPoint } from "@/types";
+import { type RVPoint } from "@/hooks/useRVSeries";
 
 interface IvChartProps {
   data: HistoryPoint[];
   tenor: string;
-  tenorData?: TenorData;
   resetCounter?: number;
   showRV?: boolean;
+  rvData?: RVPoint[];
 }
 
 const SGT_OFFSET = 8 * 3600; // UTC+8
 
 function toLineData(
   raw: HistoryPoint[],
-  field: "atm_iv" | "rr_25d" | "rv"
+  field: "atm_iv" | "rr_25d"
 ): LineData<UTCTimestamp>[] {
   const out: LineData<UTCTimestamp>[] = [];
   let prevTime = -1;
@@ -37,6 +38,18 @@ function toLineData(
     if (t <= prevTime) continue;
     prevTime = t;
     out.push({ time: t as UTCTimestamp, value });
+  }
+  return out;
+}
+
+function rvToLineData(raw: RVPoint[]): LineData<UTCTimestamp>[] {
+  const out: LineData<UTCTimestamp>[] = [];
+  let prevTime = -1;
+  for (const point of raw) {
+    const t = point.time + SGT_OFFSET;
+    if (t <= prevTime) continue;
+    prevTime = t;
+    out.push({ time: t as UTCTimestamp, value: point.rv });
   }
   return out;
 }
@@ -79,7 +92,7 @@ function SingleChart({
   height,
   t1Value,
   resetCounter,
-  overlayData,
+  rvLineData,
   overlayColor,
   overlayLabel,
   showOverlay,
@@ -92,7 +105,7 @@ function SingleChart({
   height: number;
   t1Value: number | null;
   resetCounter: number;
-  overlayData?: HistoryPoint[];
+  rvLineData?: LineData<UTCTimestamp>[];
   overlayColor?: string;
   overlayLabel?: string;
   showOverlay?: boolean;
@@ -148,7 +161,7 @@ function SingleChart({
     };
   }, [color, formatter, height]);
 
-  // Manage overlay series — add/remove based on showOverlay
+  // Manage overlay series
   useEffect(() => {
     if (!chartRef.current) return;
 
@@ -166,21 +179,20 @@ function SingleChart({
           formatter,
         },
       });
-      // Set data immediately if available
-      if (overlayData) {
-        overlaySeriesRef.current.setData(toLineData(overlayData, "rv"));
+      if (rvLineData && rvLineData.length > 0) {
+        overlaySeriesRef.current.setData(rvLineData);
       }
     } else if (!showOverlay && overlaySeriesRef.current) {
       chartRef.current.removeSeries(overlaySeriesRef.current);
       overlaySeriesRef.current = null;
     }
-  }, [showOverlay, overlayColor, formatter, overlayData]);
+  }, [showOverlay, overlayColor, formatter, rvLineData]);
 
-  // Update overlay data when it changes
+  // Update overlay data
   useEffect(() => {
-    if (!overlaySeriesRef.current || !overlayData || !showOverlay) return;
-    overlaySeriesRef.current.setData(toLineData(overlayData, "rv"));
-  }, [overlayData, showOverlay]);
+    if (!overlaySeriesRef.current || !rvLineData || !showOverlay) return;
+    overlaySeriesRef.current.setData(rvLineData);
+  }, [rvLineData, showOverlay]);
 
   // Reset zoom
   useEffect(() => {
@@ -249,8 +261,8 @@ function SingleChart({
 const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
-export default function IvChart({ data, tenor, tenorData, resetCounter = 0, showRV = false }: IvChartProps) {
-  // RV data comes from the history API (rolling hourly RV from Binance 1h candles)
+export default function IvChart({ data, tenor, resetCounter = 0, showRV = false, rvData = [] }: IvChartProps) {
+  const rvLineData = rvToLineData(rvData);
 
   return (
     <div className="space-y-4">
@@ -263,7 +275,7 @@ export default function IvChart({ data, tenor, tenorData, resetCounter = 0, show
         height={160}
         t1Value={null}
         resetCounter={resetCounter}
-        overlayData={data}
+        rvLineData={rvLineData}
         overlayColor={RV_COLOR}
         overlayLabel="RV (%)"
         showOverlay={showRV}

@@ -9,6 +9,7 @@ import TenorTable from "@/components/TenorTable";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
+import { useRVSeries } from "@/hooks/useRVSeries";
 
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
 const TermStructureChart = dynamic(() => import("@/components/TermStructureChart"), {
@@ -32,6 +33,9 @@ export default function Home() {
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
+  const btcRV = useRVSeries(btc.selectedTenor, "BTC", showRV["BTC"] ?? false);
+  const ethRV = useRVSeries(eth.selectedTenor, "ETH", showRV["ETH"] ?? false);
+  const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); }, []);
@@ -135,11 +139,9 @@ export default function Home() {
                 key={`${asset}-${d.selectedTenor}-${d.selectedRange}`}
                 data={d.historyData}
                 tenor={d.selectedTenor}
-                tenorData={d.data?.tenors?.find(
-                  (t) => t.label === d.selectedTenor
-                )}
                 resetCounter={resetCounters[asset] ?? 0}
                 showRV={showRV[asset] ?? false}
+                rvData={rvData[asset]}
               />
             )}
           </div>
