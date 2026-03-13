@@ -44,13 +44,11 @@ function computeRollingRV(
     }
   }
 
-  // Rolling RV
+  // Rolling RV (zero-drift: industry standard, no mean subtraction)
   const results: RVPoint[] = [];
   for (let end = nReturns; end <= logReturns.length; end++) {
     const window = logReturns.slice(end - nReturns, end);
-    const mean = window.reduce((a, b) => a + b, 0) / window.length;
-    const variance =
-      window.reduce((a, r) => a + (r - mean) ** 2, 0) / (window.length - 1);
+    const variance = window.reduce((a, r) => a + r * r, 0) / window.length;
     const rv = Math.sqrt(variance) * Math.sqrt(PERIODS_PER_YEAR) * 100;
     // Key by candle open time floored to hour (unix seconds)
     const hourTs = Math.floor(times[end] / 1000) - (Math.floor(times[end] / 1000) % 3600);
@@ -61,8 +59,9 @@ function computeRollingRV(
 }
 
 async function fetchBinanceCandles(symbol: string): Promise<{ time: number; close: number }[]> {
+  // Use Binance SPOT (not futures) — matches the spot index that options are priced against
   const res = await fetch(
-    `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=1500`
+    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=1500`
   );
   if (!res.ok) return [];
   const raw: unknown[][] = await res.json();
