@@ -2,21 +2,30 @@
 Flask application factory — JSON-only API (no HTML).
 """
 
+from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 VALID_CURRENCIES = {"BTC", "ETH"}
 
 
-def create_app(pollers, history_store):
+def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=None):
     """Create and configure the Flask application.
 
     Args:
         pollers: Dict mapping currency to Poller instance, e.g. {"BTC": ..., "ETH": ...}.
         history_store: A HistoryStore instance for querying historical data.
+        rv_calculator: Optional RealizedVolCalculator for rolling RV overlay.
+        assets: Optional ASSETS config dict for perp_name lookup.
+        tenors: Optional TENORS config list for tenor days lookup.
     """
     app = Flask(__name__)
     CORS(app)
+
+    # Build tenor label -> days lookup
+    tenor_days_map = {}
+    if tenors:
+        tenor_days_map = {t["label"]: t["days"] for t in tenors}
 
     def _get_currency():
         """Extract and validate currency query param (default BTC)."""
@@ -26,7 +35,7 @@ def create_app(pollers, history_store):
         return currency
 
     @app.route("/api/tenors")
-    def tenors():
+    def tenors_endpoint():
         currency = _get_currency()
         if currency is None:
             return jsonify({"error": "Invalid currency"}), 400
@@ -47,6 +56,21 @@ def create_app(pollers, history_store):
             hours = 48.0
         hours = max(0.01, min(hours, 744.0))
         data = history_store.get_history(tenor, hours, currency)
+
+        # Merge rolling RV time series into history points
+        if rv_calculator and assets and tenor in tenor_days_map:
+            perp_name = assets.get(currency, {}).get("perp_name")
+            if perp_name:
+                rv_series = rv_calculator.get_rolling_series(
+                    perp_name, tenor_days_map[tenor]
+                )
+                if rv_series:
+                    for point in data:
+                        if point.get("rv") is None:
+                            dt = datetime.fromtimestamp(point["time"], tz=timezone.utc)
+                            date_str = dt.strftime("%Y-%m-%d")
+                            point["rv"] = rv_series.get(date_str)
+
         return jsonify(data)
 
     @app.route("/api/vol-stats")

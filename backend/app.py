@@ -69,7 +69,7 @@ for currency, asset_cfg in ASSETS.items():
     poller.start()
     pollers[currency] = poller
 
-app = create_app(pollers, history_store)
+app = create_app(pollers, history_store, rv_calculator=rv_calculator, assets=ASSETS, tenors=TENORS)
 
 if __name__ == "__main__":
     logging.basicConfig(
