@@ -247,25 +247,21 @@ const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
 export default function IvChart({ data, tenor, tenorData, resetCounter = 0 }: IvChartProps) {
-  const [showRV, setShowRV] = useState(true);
-
-  const hasRVData = data.some((p) => p.rv != null);
+  const [showRV, setShowRV] = useState(false);
 
   return (
     <div className="space-y-4">
-      {hasRVData && (
-        <div className="flex items-center gap-2">
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
-            <input
-              type="checkbox"
-              checked={showRV}
-              onChange={(e) => setShowRV(e.target.checked)}
-              className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
-            />
-            <span style={{ color: RV_COLOR }}>Realized Vol</span>
-          </label>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+          <input
+            type="checkbox"
+            checked={showRV}
+            onChange={(e) => setShowRV(e.target.checked)}
+            className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
+          />
+          <span style={{ color: RV_COLOR }}>Realized Vol</span>
+        </label>
+      </div>
       <SingleChart
         data={data}
         field="atm_iv"
@@ -278,7 +274,7 @@ export default function IvChart({ data, tenor, tenorData, resetCounter = 0 }: Iv
         overlayData={data}
         overlayColor={RV_COLOR}
         overlayLabel="RV (%)"
-        showOverlay={showRV && hasRVData}
+        showOverlay={showRV}
       />
       <SingleChart
         data={data}
