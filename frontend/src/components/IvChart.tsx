@@ -26,7 +26,7 @@ const SGT_OFFSET = 8 * 3600; // UTC+8
 
 function toLineData(
   raw: HistoryPoint[],
-  field: "atm_iv" | "rr_25d"
+  field: "atm_iv" | "rr_25d" | "rv"
 ): LineData<UTCTimestamp>[] {
   const out: LineData<UTCTimestamp>[] = [];
   let prevTime = -1;
@@ -34,7 +34,7 @@ function toLineData(
     const value = point[field];
     if (value == null) continue;
     const t = point.time + SGT_OFFSET;
-    if (t <= prevTime) continue; // skip duplicate/non-ascending timestamps
+    if (t <= prevTime) continue;
     prevTime = t;
     out.push({ time: t as UTCTimestamp, value });
   }
@@ -79,8 +79,10 @@ function SingleChart({
   height,
   t1Value,
   resetCounter,
-  rvValue,
-  showRV,
+  overlayData,
+  overlayColor,
+  overlayLabel,
+  showOverlay,
 }: {
   data: HistoryPoint[];
   field: "atm_iv" | "rr_25d";
@@ -90,14 +92,16 @@ function SingleChart({
   height: number;
   t1Value: number | null;
   resetCounter: number;
-  rvValue?: number | null;
-  showRV?: boolean;
+  overlayData?: HistoryPoint[];
+  overlayColor?: string;
+  overlayLabel?: string;
+  showOverlay?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const overlaySeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const priceLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
-  const rvLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
 
   // Create chart once
   useEffect(() => {
@@ -140,24 +144,58 @@ function SingleChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      overlaySeriesRef.current = null;
     };
   }, [color, formatter, height]);
 
-  // Reset zoom (fit full range)
+  // Manage overlay series — add/remove based on showOverlay
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    if (showOverlay && !overlaySeriesRef.current && overlayColor) {
+      overlaySeriesRef.current = chartRef.current.addSeries(LineSeries, {
+        color: overlayColor,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        crosshairMarkerVisible: true,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        priceScaleId: "right",
+        priceFormat: {
+          type: "custom",
+          formatter,
+        },
+      });
+      // Set data immediately if available
+      if (overlayData) {
+        overlaySeriesRef.current.setData(toLineData(overlayData, "rv"));
+      }
+    } else if (!showOverlay && overlaySeriesRef.current) {
+      chartRef.current.removeSeries(overlaySeriesRef.current);
+      overlaySeriesRef.current = null;
+    }
+  }, [showOverlay, overlayColor, formatter, overlayData]);
+
+  // Update overlay data when it changes
+  useEffect(() => {
+    if (!overlaySeriesRef.current || !overlayData || !showOverlay) return;
+    overlaySeriesRef.current.setData(toLineData(overlayData, "rv"));
+  }, [overlayData, showOverlay]);
+
+  // Reset zoom
   useEffect(() => {
     if (resetCounter > 0 && chartRef.current) {
       chartRef.current.timeScale().fitContent();
     }
   }, [resetCounter]);
 
-  // Update data + all price lines (T-1 and RV) in a single effect
+  // Update main data + T-1 reference line
   useEffect(() => {
     if (!chartRef.current || !seriesRef.current) return;
 
     const lineData = toLineData(data, field);
     seriesRef.current.setData(lineData);
 
-    // Remove previous T-1 line before adding a new one
     if (priceLineRef.current) {
       seriesRef.current.removePriceLine(priceLineRef.current);
       priceLineRef.current = null;
@@ -174,25 +212,8 @@ function SingleChart({
       });
     }
 
-    // RV horizontal reference line
-    if (rvLineRef.current) {
-      seriesRef.current.removePriceLine(rvLineRef.current);
-      rvLineRef.current = null;
-    }
-
-    if (showRV && rvValue != null) {
-      rvLineRef.current = seriesRef.current.createPriceLine({
-        price: rvValue,
-        color: RV_COLOR,
-        lineWidth: 2,
-        lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: "RV",
-      });
-    }
-
     chartRef.current.timeScale().fitContent();
-  }, [data, field, t1Value, showRV, rvValue]);
+  }, [data, field, t1Value]);
 
   return (
     <div>
@@ -210,15 +231,13 @@ function SingleChart({
             <span className="text-white/40">24h ago ({formatter(t1Value)})</span>
           </span>
         )}
-        {showRV && (
+        {showOverlay && overlayColor && overlayLabel && (
           <span className="flex items-center gap-1.5">
             <span
               className="inline-block h-0 w-4 border-t border-dashed"
-              style={{ borderColor: RV_COLOR }}
+              style={{ borderColor: overlayColor }}
             />
-            <span style={{ color: RV_COLOR }}>
-              RV {rvValue != null ? `(${formatter(rvValue)})` : ""}
-            </span>
+            <span style={{ color: overlayColor }}>{overlayLabel}</span>
           </span>
         )}
       </div>
@@ -231,7 +250,12 @@ const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
 export default function IvChart({ data, tenor, tenorData, resetCounter = 0, showRV = false }: IvChartProps) {
-  const rvValue = tenorData?.rv ?? null;
+  // Fill missing historical rv values with the current live rv so the line
+  // spans the entire chart immediately (old rows have rv=null in the DB).
+  const liveRV = tenorData?.rv ?? null;
+  const rvData = liveRV != null
+    ? data.map((p) => ({ ...p, rv: p.rv ?? liveRV }))
+    : data;
 
   return (
     <div className="space-y-4">
@@ -244,8 +268,10 @@ export default function IvChart({ data, tenor, tenorData, resetCounter = 0, show
         height={160}
         t1Value={null}
         resetCounter={resetCounter}
-        rvValue={rvValue}
-        showRV={showRV}
+        overlayData={rvData}
+        overlayColor={RV_COLOR}
+        overlayLabel="RV (%)"
+        showOverlay={showRV}
       />
       <SingleChart
         data={data}
