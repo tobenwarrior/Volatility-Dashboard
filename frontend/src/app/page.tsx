@@ -10,6 +10,7 @@ import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 import { useRVSeries } from "@/hooks/useRVSeries";
+import { TIME_RANGE_HOURS } from "@/types";
 
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
 const TermStructureChart = dynamic(() => import("@/components/TermStructureChart"), {
@@ -33,8 +34,8 @@ export default function Home() {
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
-  const btcRV = useRVSeries(btc.selectedTenor, "BTC", showRV["BTC"] ?? false);
-  const ethRV = useRVSeries(eth.selectedTenor, "ETH", showRV["ETH"] ?? false);
+  const btcRV = useRVSeries(btc.selectedTenor, "BTC", showRV["BTC"] ?? false, TIME_RANGE_HOURS[btc.selectedRange]);
+  const ethRV = useRVSeries(eth.selectedTenor, "ETH", showRV["ETH"] ?? false, TIME_RANGE_HOURS[eth.selectedRange]);
   const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
   const [ready, setReady] = useState(false);

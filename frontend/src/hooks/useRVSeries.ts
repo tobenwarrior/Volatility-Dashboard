@@ -72,7 +72,7 @@ async function fetchBinanceCandles(symbol: string): Promise<{ time: number; clos
   }));
 }
 
-export function useRVSeries(tenor: TenorLabel, asset: Asset, enabled: boolean) {
+export function useRVSeries(tenor: TenorLabel, asset: Asset, enabled: boolean, hours: number = 48) {
   const [data, setData] = useState<RVPoint[]>([]);
 
   const fetchRV = useCallback(async () => {
@@ -82,11 +82,13 @@ export function useRVSeries(tenor: TenorLabel, asset: Asset, enabled: boolean) {
       const candles = await fetchBinanceCandles(symbol);
       const tenorDays = TENOR_DAYS[tenor];
       const series = computeRollingRV(candles, tenorDays);
-      setData(series);
+      // Filter to match the selected time range
+      const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
+      setData(series.filter((p) => p.time >= cutoff));
     } catch {
       // silently ignore — RV is optional overlay
     }
-  }, [tenor, asset, enabled]);
+  }, [tenor, asset, enabled, hours]);
 
   useEffect(() => {
     if (!enabled) {
