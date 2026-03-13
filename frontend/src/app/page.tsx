@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, Fragment } from "react";
+import { useState, useCallback, useEffect, Fragment, type ChangeEvent } from "react";
 import dynamic from "next/dynamic";
 import { useAssetData } from "@/hooks/useAssetData";
 import StatusBadge from "@/components/StatusBadge";
@@ -31,6 +31,7 @@ export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); }, []);
@@ -103,6 +104,18 @@ export default function Home() {
                   selected={d.selectedRange}
                   onChange={d.setSelectedRange}
                 />
+                <div className="h-4 w-px bg-white/[0.08]" />
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={showRV[asset] ?? false}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      setShowRV((prev) => ({ ...prev, [asset]: e.target.checked }))
+                    }
+                    className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
+                  />
+                  <span className="font-medium text-amber-500">RV</span>
+                </label>
               </div>
             </div>
 
@@ -126,6 +139,7 @@ export default function Home() {
                   (t) => t.label === d.selectedTenor
                 )}
                 resetCounter={resetCounters[asset] ?? 0}
+                showRV={showRV[asset] ?? false}
               />
             )}
           </div>

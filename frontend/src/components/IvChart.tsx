@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   createChart,
   ColorType,
@@ -19,13 +19,14 @@ interface IvChartProps {
   tenor: string;
   tenorData?: TenorData;
   resetCounter?: number;
+  showRV?: boolean;
 }
 
 const SGT_OFFSET = 8 * 3600; // UTC+8
 
 function toLineData(
   raw: HistoryPoint[],
-  field: "atm_iv" | "rr_25d" | "rv"
+  field: "atm_iv" | "rr_25d"
 ): LineData<UTCTimestamp>[] {
   const out: LineData<UTCTimestamp>[] = [];
   let prevTime = -1;
@@ -78,10 +79,8 @@ function SingleChart({
   height,
   t1Value,
   resetCounter,
-  overlayData,
-  overlayColor,
-  overlayLabel,
-  showOverlay,
+  rvValue,
+  showRV,
 }: {
   data: HistoryPoint[];
   field: "atm_iv" | "rr_25d";
@@ -91,16 +90,14 @@ function SingleChart({
   height: number;
   t1Value: number | null;
   resetCounter: number;
-  overlayData?: HistoryPoint[];
-  overlayColor?: string;
-  overlayLabel?: string;
-  showOverlay?: boolean;
+  rvValue?: number | null;
+  showRV?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const overlaySeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const priceLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
+  const rvLineRef = useRef<ReturnType<ISeriesApi<SeriesType>["createPriceLine"]> | null>(null);
 
   // Create chart once
   useEffect(() => {
@@ -143,40 +140,8 @@ function SingleChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
-      overlaySeriesRef.current = null;
     };
   }, [color, formatter, height]);
-
-  // Manage overlay series lifecycle
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (showOverlay && !overlaySeriesRef.current && overlayColor) {
-      overlaySeriesRef.current = chartRef.current.addSeries(LineSeries, {
-        color: overlayColor,
-        lineWidth: 2,
-        lineStyle: LineStyle.Dashed,
-        crosshairMarkerVisible: true,
-        lastValueVisible: true,
-        priceLineVisible: false,
-        priceScaleId: "right",
-        priceFormat: {
-          type: "custom",
-          formatter,
-        },
-      });
-    } else if (!showOverlay && overlaySeriesRef.current) {
-      chartRef.current.removeSeries(overlaySeriesRef.current);
-      overlaySeriesRef.current = null;
-    }
-  }, [showOverlay, overlayColor, formatter]);
-
-  // Update overlay data
-  useEffect(() => {
-    if (!overlaySeriesRef.current || !overlayData || !showOverlay) return;
-    const lineData = toLineData(overlayData, "rv");
-    overlaySeriesRef.current.setData(lineData);
-  }, [overlayData, showOverlay]);
 
   // Reset zoom (fit full range)
   useEffect(() => {
@@ -212,6 +177,28 @@ function SingleChart({
     chartRef.current.timeScale().fitContent();
   }, [data, field, t1Value]);
 
+  // RV horizontal reference line
+  useEffect(() => {
+    if (!seriesRef.current) return;
+
+    // Remove previous RV line
+    if (rvLineRef.current) {
+      seriesRef.current.removePriceLine(rvLineRef.current);
+      rvLineRef.current = null;
+    }
+
+    if (showRV && rvValue != null) {
+      rvLineRef.current = seriesRef.current.createPriceLine({
+        price: rvValue,
+        color: RV_COLOR,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "RV",
+      });
+    }
+  }, [showRV, rvValue]);
+
   return (
     <div>
       <div className="mb-2 flex items-center gap-3 text-[11px]">
@@ -228,13 +215,13 @@ function SingleChart({
             <span className="text-white/40">24h ago ({formatter(t1Value)})</span>
           </span>
         )}
-        {showOverlay && overlayLabel && overlayColor && (
+        {showRV && rvValue != null && (
           <span className="flex items-center gap-1.5">
             <span
               className="inline-block h-0 w-4 border-t border-dashed"
-              style={{ borderColor: overlayColor }}
+              style={{ borderColor: RV_COLOR }}
             />
-            <span style={{ color: overlayColor }}>{overlayLabel}</span>
+            <span style={{ color: RV_COLOR }}>RV ({formatter(rvValue)})</span>
           </span>
         )}
       </div>
@@ -246,22 +233,11 @@ function SingleChart({
 const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
-export default function IvChart({ data, tenor, tenorData, resetCounter = 0 }: IvChartProps) {
-  const [showRV, setShowRV] = useState(false);
+export default function IvChart({ data, tenor, tenorData, resetCounter = 0, showRV = false }: IvChartProps) {
+  const rvValue = tenorData?.rv ?? null;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
-          <input
-            type="checkbox"
-            checked={showRV}
-            onChange={(e) => setShowRV(e.target.checked)}
-            className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
-          />
-          <span style={{ color: RV_COLOR }}>Realized Vol</span>
-        </label>
-      </div>
       <SingleChart
         data={data}
         field="atm_iv"
@@ -271,10 +247,8 @@ export default function IvChart({ data, tenor, tenorData, resetCounter = 0 }: Iv
         height={160}
         t1Value={null}
         resetCounter={resetCounter}
-        overlayData={data}
-        overlayColor={RV_COLOR}
-        overlayLabel="RV (%)"
-        showOverlay={showRV}
+        rvValue={rvValue}
+        showRV={showRV}
       />
       <SingleChart
         data={data}

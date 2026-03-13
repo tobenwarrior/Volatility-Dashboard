@@ -3,6 +3,7 @@ export interface TenorData {
   target_days: number;
   atm_iv: number | null;
   rr_25d: number | null;
+  rv: number | null;
   dod_iv_change: number | null;
   dod_rr_change: number | null;
   change_hours: number | null;
