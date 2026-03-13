@@ -150,7 +150,7 @@ function SingleChart({
     }
   }, [resetCounter]);
 
-  // Update data + T-1 reference line
+  // Update data + all price lines (T-1 and RV) in a single effect
   useEffect(() => {
     if (!chartRef.current || !seriesRef.current) return;
 
@@ -158,7 +158,7 @@ function SingleChart({
     seriesRef.current.setData(lineData);
 
     // Remove previous T-1 line before adding a new one
-    if (priceLineRef.current && seriesRef.current) {
+    if (priceLineRef.current) {
       seriesRef.current.removePriceLine(priceLineRef.current);
       priceLineRef.current = null;
     }
@@ -174,14 +174,7 @@ function SingleChart({
       });
     }
 
-    chartRef.current.timeScale().fitContent();
-  }, [data, field, t1Value]);
-
-  // RV horizontal reference line
-  useEffect(() => {
-    if (!seriesRef.current) return;
-
-    // Remove previous RV line
+    // RV horizontal reference line
     if (rvLineRef.current) {
       seriesRef.current.removePriceLine(rvLineRef.current);
       rvLineRef.current = null;
@@ -197,7 +190,9 @@ function SingleChart({
         title: "RV",
       });
     }
-  }, [showRV, rvValue]);
+
+    chartRef.current.timeScale().fitContent();
+  }, [data, field, t1Value, showRV, rvValue]);
 
   return (
     <div>
@@ -215,13 +210,15 @@ function SingleChart({
             <span className="text-white/40">24h ago ({formatter(t1Value)})</span>
           </span>
         )}
-        {showRV && rvValue != null && (
+        {showRV && (
           <span className="flex items-center gap-1.5">
             <span
               className="inline-block h-0 w-4 border-t border-dashed"
               style={{ borderColor: RV_COLOR }}
             />
-            <span style={{ color: RV_COLOR }}>RV ({formatter(rvValue)})</span>
+            <span style={{ color: RV_COLOR }}>
+              RV {rvValue != null ? `(${formatter(rvValue)})` : ""}
+            </span>
           </span>
         )}
       </div>
