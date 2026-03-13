@@ -16,7 +16,8 @@ class Poller:
                  tenors, poll_interval=5, price_interval=1,
                  currency="BTC", index_name="btc_usd",
                  ticker_store=None, subscription_manager=None,
-                 ws_spot_stale_seconds=5):
+                 ws_spot_stale_seconds=5,
+                 rv_calculator=None, perp_name=None):
         self._client = client
         self._calculator = calculator
         self._rr_calculator = rr_calculator
@@ -29,6 +30,8 @@ class Poller:
         self._ticker_store = ticker_store
         self._subscription_manager = subscription_manager
         self._ws_spot_stale = ws_spot_stale_seconds
+        self._rv_calculator = rv_calculator
+        self._perp_name = perp_name
 
         self._latest_tenor_data = {}
         self._latest_price = {"price": None}
@@ -89,10 +92,20 @@ class Poller:
                     self._currency,
                 )
 
-                # 3. Get DoD changes from history
+                # 3. Compute realized volatility
+                rv_results = {}
+                if self._rv_calculator and self._perp_name:
+                    try:
+                        rv_results = self._rv_calculator.compute_all_tenors(
+                            self._perp_name, self._tenors
+                        )
+                    except Exception:
+                        logger.exception("RV computation failed for %s", self._currency)
+
+                # 4. Get DoD changes from history
                 dod_changes = self._history_store.get_dod_changes(self._currency)
 
-                # 4. Assemble tenor list
+                # 5. Assemble tenor list
                 tenor_list = []
                 for tenor_cfg in self._tenors:
                     label = tenor_cfg["label"]
@@ -104,6 +117,7 @@ class Poller:
                         "target_days": tenor_cfg["days"],
                         "atm_iv": iv_info.get("atm_iv"),
                         "rr_25d": rr,
+                        "rv": rv_results.get(label),
                         "dod_iv_change": dod.get("dod_iv_change"),
                         "dod_rr_change": dod.get("dod_rr_change"),
                         "change_hours": dod.get("change_hours"),
@@ -111,10 +125,10 @@ class Poller:
                         "error": iv_info.get("error"),
                     })
 
-                # 5. Save snapshot to history
+                # 6. Save snapshot to history
                 self._history_store.save_snapshot(multi["timestamp"], tenor_list, self._currency)
 
-                # 6. Store for API serving
+                # 7. Store for API serving
                 result = {
                     "timestamp": multi["timestamp"],
                     "spot_price": round(spot, 2),

@@ -36,15 +36,18 @@ export interface HistoryPoint {
   time: number;
   atm_iv: number | null;
   rr_25d: number | null;
+  rv: number | null;
 }
 
 export type Asset = "BTC" | "ETH";
 export type TenorLabel = "1W" | "2W" | "30D" | "60D" | "90D" | "180D";
-export type TimeRange = "1H" | "4H" | "24H" | "7D";
+export type TimeRange = "1H" | "4H" | "24H" | "7D" | "14D" | "30D";
 
 export const TIME_RANGE_HOURS: Record<TimeRange, number> = {
   "1H": 1,
   "4H": 4,
   "24H": 24,
   "7D": 168,
+  "14D": 336,
+  "30D": 720,
 };

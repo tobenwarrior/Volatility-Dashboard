@@ -39,7 +39,7 @@ class HistoryStore:
             self._pool.putconn(conn)
 
     def _ensure_db(self):
-        """Create table and index if they don't exist."""
+        """Create table and index if they don't exist, and migrate columns."""
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -49,12 +49,17 @@ class HistoryStore:
                         tenor TEXT NOT NULL,
                         atm_iv DOUBLE PRECISION,
                         rr_25d DOUBLE PRECISION,
-                        currency TEXT NOT NULL DEFAULT 'BTC'
+                        currency TEXT NOT NULL DEFAULT 'BTC',
+                        rv DOUBLE PRECISION
                     )
                 """)
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_snapshots_currency_tenor_ts
                     ON iv_snapshots(currency, tenor, timestamp)
+                """)
+                # Migration: add rv column if table already existed without it
+                cur.execute("""
+                    ALTER TABLE iv_snapshots ADD COLUMN IF NOT EXISTS rv DOUBLE PRECISION
                 """)
 
     def save_snapshot(self, timestamp, tenor_results, currency="BTC"):
@@ -66,14 +71,14 @@ class HistoryStore:
             currency: "BTC" or "ETH".
         """
         rows = [
-            (timestamp, t["label"], t.get("atm_iv"), t.get("rr_25d"), currency)
+            (timestamp, t["label"], t.get("atm_iv"), t.get("rr_25d"), currency, t.get("rv"))
             for t in tenor_results
         ]
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.executemany(
-                    "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d, currency) "
-                    "VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d, currency, rv) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
                     rows,
                 )
 
@@ -207,7 +212,7 @@ class HistoryStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT timestamp, atm_iv, rr_25d FROM iv_snapshots "
+                    "SELECT timestamp, atm_iv, rr_25d, rv FROM iv_snapshots "
                     "WHERE currency = %s AND tenor = %s AND timestamp >= %s "
                     "ORDER BY timestamp ASC",
                     (currency, tenor, cutoff),
@@ -225,12 +230,13 @@ class HistoryStore:
             rows = sampled
 
         result = []
-        for ts, atm_iv, rr_25d in rows:
+        for ts, atm_iv, rr_25d, rv in rows:
             unix_ts = int(ts.timestamp())
             result.append({
                 "time": unix_ts,
                 "atm_iv": round(atm_iv, 4) if atm_iv is not None else None,
                 "rr_25d": round(rr_25d, 4) if rr_25d is not None else None,
+                "rv": round(rv, 4) if rv is not None else None,
             })
 
         return result

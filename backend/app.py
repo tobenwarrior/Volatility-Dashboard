@@ -16,6 +16,7 @@ from api.client import DeribitClient
 from services.volatility import VolatilityCalculator
 from services.risk_reversal import RiskReversalCalculator
 from services.history import HistoryStore
+from services.realized_vol import RealizedVolCalculator
 from ws.ticker_store import TickerDataStore
 from ws.client import DeribitWSClient
 from ws.subscription_manager import SubscriptionManager
@@ -49,6 +50,7 @@ rr_calculator = RiskReversalCalculator(
     ticker_store=ticker_store,
 )
 history_store = HistoryStore()
+rv_calculator = RealizedVolCalculator(client)
 
 # --- One poller per asset ---
 pollers = {}
@@ -61,6 +63,8 @@ for currency, asset_cfg in ASSETS.items():
         ticker_store=ticker_store,
         subscription_manager=subscription_manager,
         ws_spot_stale_seconds=WS_SPOT_STALE_SECONDS,
+        rv_calculator=rv_calculator,
+        perp_name=asset_cfg["perp_name"],
     )
     poller.start()
     pollers[currency] = poller

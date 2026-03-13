@@ -14,8 +14,8 @@ REQUEST_TIMEOUT = 10  # seconds
 # Supported assets
 # ---------------------------------------------------------------------------
 ASSETS = {
-    "BTC": {"index_name": "btc_usd", "currency": "BTC"},
-    "ETH": {"index_name": "eth_usd", "currency": "ETH"},
+    "BTC": {"index_name": "btc_usd", "currency": "BTC", "perp_name": "BTC-PERPETUAL"},
+    "ETH": {"index_name": "eth_usd", "currency": "ETH", "perp_name": "ETH-PERPETUAL"},
 }
 
 # ---------------------------------------------------------------------------
@@ -57,4 +57,4 @@ WS_SPOT_STALE_SECONDS = 5  # fall back to REST if WS spot older than this
 # ---------------------------------------------------------------------------
 # History database (Postgres via DATABASE_URL env var)
 # ---------------------------------------------------------------------------
-HISTORY_KEEP_DAYS = 14  # enough for 7D chart + T-1 overlay
+HISTORY_KEEP_DAYS = 30  # enough for 30D chart + T-1 overlay

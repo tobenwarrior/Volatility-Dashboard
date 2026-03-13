@@ -45,7 +45,7 @@ def create_app(pollers, history_store):
             hours = float(request.args.get("hours", "48"))
         except (ValueError, TypeError):
             hours = 48.0
-        hours = max(0.01, min(hours, 336.0))
+        hours = max(0.01, min(hours, 744.0))
         data = history_store.get_history(tenor, hours, currency)
         return jsonify(data)
 

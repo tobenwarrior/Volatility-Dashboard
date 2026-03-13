@@ -1,6 +1,6 @@
 import { TimeRange } from "@/types";
 
-const RANGES: TimeRange[] = ["1H", "4H", "24H", "7D"];
+const RANGES: TimeRange[] = ["1H", "4H", "24H", "7D", "14D", "30D"];
 
 interface TimeRangeSelectorProps {
   selected: TimeRange;
