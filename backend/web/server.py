@@ -57,7 +57,7 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
         hours = max(0.01, min(hours, 744.0))
         data = history_store.get_history(tenor, hours, currency)
 
-        # Merge rolling RV time series into history points
+        # Merge rolling RV time series (hourly) into history points
         if rv_calculator and assets and tenor in tenor_days_map:
             perp_name = assets.get(currency, {}).get("perp_name")
             if perp_name:
@@ -66,10 +66,11 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
                 )
                 if rv_series:
                     for point in data:
-                        if point.get("rv") is None:
-                            dt = datetime.fromtimestamp(point["time"], tz=timezone.utc)
-                            date_str = dt.strftime("%Y-%m-%d")
-                            point["rv"] = rv_series.get(date_str)
+                        dt = datetime.fromtimestamp(point["time"], tz=timezone.utc)
+                        hour_key = dt.strftime("%Y-%m-%d %H")
+                        rv_val = rv_series.get(hour_key)
+                        if rv_val is not None:
+                            point["rv"] = rv_val
 
         return jsonify(data)
 

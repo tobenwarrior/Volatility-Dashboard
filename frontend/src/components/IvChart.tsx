@@ -250,12 +250,7 @@ const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
 export default function IvChart({ data, tenor, tenorData, resetCounter = 0, showRV = false }: IvChartProps) {
-  // Fill missing historical rv values with the current live rv so the line
-  // spans the entire chart immediately (old rows have rv=null in the DB).
-  const liveRV = tenorData?.rv ?? null;
-  const rvData = liveRV != null
-    ? data.map((p) => ({ ...p, rv: p.rv ?? liveRV }))
-    : data;
+  // RV data comes from the history API (rolling hourly RV from Binance 1h candles)
 
   return (
     <div className="space-y-4">
@@ -268,7 +263,7 @@ export default function IvChart({ data, tenor, tenorData, resetCounter = 0, show
         height={160}
         t1Value={null}
         resetCounter={resetCounter}
-        overlayData={rvData}
+        overlayData={data}
         overlayColor={RV_COLOR}
         overlayLabel="RV (%)"
         showOverlay={showRV}

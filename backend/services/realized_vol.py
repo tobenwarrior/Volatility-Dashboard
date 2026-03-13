@@ -1,8 +1,11 @@
 """
 Realized Volatility (RV) calculator.
 
-Computes annualized realized volatility from daily perpetual close prices.
-RV = std(log_returns[-N:]) * sqrt(365) * 100
+Uses Binance 1-hour perpetual futures candles for high-granularity RV
+that updates every hour and closely tracks implied volatility.
+
+RV = std(log_returns[-N:]) * sqrt(8760) * 100
+where N = tenor_days * 24 (hourly returns)
 """
 
 import logging
@@ -10,39 +13,80 @@ import math
 import time as _time
 from datetime import datetime, timezone
 
+import requests
+
 logger = logging.getLogger(__name__)
 
+BINANCE_KLINE_URL = "https://fapi.binance.com/fapi/v1/klines"
+PERIODS_PER_YEAR = 8760  # hours in a year
 _CACHE_TTL = 300  # 5 minutes
+
+# Map Deribit currency to Binance futures symbol
+BINANCE_SYMBOLS = {
+    "BTC": "BTCUSDT",
+    "ETH": "ETHUSDT",
+}
+
+
+def _fetch_binance_1h(symbol, limit=1500):
+    """Fetch up to `limit` 1-hour candles from Binance futures."""
+    resp = requests.get(
+        BINANCE_KLINE_URL,
+        params={"symbol": symbol, "interval": "1h", "limit": limit},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    # Each candle: [open_time, open, high, low, close, volume, ...]
+    raw = resp.json()
+    return [{"time_ms": c[0], "close": float(c[4])} for c in raw]
 
 
 class RealizedVolCalculator:
-    """Fetches daily closes once per call and computes RV for multiple tenors."""
+    """Computes RV from Binance 1h perpetual candles."""
 
-    def __init__(self, client):
-        self._client = client
-        self._rolling_cache = {}  # (perp_name, tenor_days) -> (timestamp, {date_str: rv})
+    def __init__(self, client=None):
+        self._client = client  # kept for backward compat, unused now
+        self._cache = {}  # currency -> (timestamp, candles)
+        self._rolling_cache = {}  # (currency, tenor_days) -> (timestamp, series)
+
+    def _get_candles(self, currency):
+        """Get 1h candles with caching."""
+        now = _time.time()
+        if currency in self._cache:
+            cached_time, cached = self._cache[currency]
+            if now - cached_time < _CACHE_TTL:
+                return cached
+
+        symbol = BINANCE_SYMBOLS.get(currency)
+        if not symbol:
+            return []
+
+        try:
+            candles = _fetch_binance_1h(symbol, limit=1500)
+        except Exception:
+            logger.exception("Failed to fetch Binance 1h candles for %s", symbol)
+            return []
+
+        self._cache[currency] = (now, candles)
+        return candles
 
     def compute_all_tenors(self, perp_name, tenors):
-        """Compute realized vol for each tenor from daily candle closes.
+        """Compute current RV for each tenor.
 
         Args:
-            perp_name: Instrument name, e.g. "BTC-PERPETUAL".
+            perp_name: Unused (kept for backward compat). Currency derived from tenors call context.
             tenors: List of tenor config dicts with "label" and "days".
 
         Returns:
             Dict mapping tenor label to RV (float) or None on error.
         """
-        max_days = max(t["days"] for t in tenors) + 5  # small buffer
-        try:
-            candles = self._client.get_daily_candles(perp_name, days=max_days)
-        except Exception:
-            logger.exception("Failed to fetch daily candles for %s", perp_name)
+        # Derive currency from perp_name
+        currency = perp_name.split("-")[0] if perp_name else "BTC"
+        candles = self._get_candles(currency)
+
+        if len(candles) < 50:
             return {t["label"]: None for t in tenors}
 
-        if len(candles) < 3:
-            return {t["label"]: None for t in tenors}
-
-        # Compute log returns from close prices
         closes = [c["close"] for c in candles]
         log_returns = []
         for i in range(1, len(closes)):
@@ -51,7 +95,7 @@ class RealizedVolCalculator:
 
         results = {}
         for tenor in tenors:
-            n = tenor["days"]
+            n = tenor["days"] * 24  # hourly returns needed
             label = tenor["label"]
             if len(log_returns) < n:
                 results[label] = None
@@ -59,18 +103,19 @@ class RealizedVolCalculator:
             window = log_returns[-n:]
             mean = sum(window) / len(window)
             variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
-            rv = math.sqrt(variance) * math.sqrt(365) * 100
+            rv = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR) * 100
             results[label] = round(rv, 4)
 
         return results
 
     def get_rolling_series(self, perp_name, tenor_days):
-        """Compute rolling daily RV for the given tenor, with caching.
+        """Compute rolling hourly RV for the given tenor, with caching.
 
-        Returns a dict mapping date string (YYYY-MM-DD) to RV value.
-        Cached for 5 minutes since daily candles only change once per day.
+        Returns a dict mapping "YYYY-MM-DD HH" to RV value — one entry
+        per hour so the overlay line updates smoothly.
         """
-        cache_key = (perp_name, tenor_days)
+        currency = perp_name.split("-")[0] if perp_name else "BTC"
+        cache_key = (currency, tenor_days)
         now = _time.time()
 
         if cache_key in self._rolling_cache:
@@ -78,21 +123,15 @@ class RealizedVolCalculator:
             if now - cached_time < _CACHE_TTL:
                 return cached_data
 
-        # Fetch enough candles: tenor window + 60 extra days of history
-        fetch_days = tenor_days + 60
-        try:
-            candles = self._client.get_daily_candles(perp_name, days=fetch_days)
-        except Exception:
-            logger.exception("Failed to fetch daily candles for rolling RV")
-            return {}
+        candles = self._get_candles(currency)
+        n_returns = tenor_days * 24  # hourly returns for the window
 
-        if len(candles) < tenor_days + 1:
+        if len(candles) < n_returns + 2:
             return {}
 
         closes = [c["close"] for c in candles]
-        ticks = [c["ticks"] for c in candles]
+        times = [c["time_ms"] for c in candles]
 
-        # Compute all log returns
         log_returns = []
         for i in range(1, len(closes)):
             if closes[i] > 0 and closes[i - 1] > 0:
@@ -100,18 +139,17 @@ class RealizedVolCalculator:
             else:
                 log_returns.append(0.0)
 
-        # Rolling RV: for each day d >= tenor_days, compute RV from
-        # the preceding tenor_days returns
+        # Rolling RV: slide by 1 hour
         results = {}
-        for d in range(tenor_days, len(log_returns) + 1):
-            window = log_returns[d - tenor_days:d]
+        for end in range(n_returns, len(log_returns) + 1):
+            window = log_returns[end - n_returns:end]
             mean = sum(window) / len(window)
             variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
-            rv = math.sqrt(variance) * math.sqrt(365) * 100
-            # ticks[d] corresponds to the candle whose close completes this window
-            dt = datetime.fromtimestamp(ticks[d] / 1000, tz=timezone.utc)
-            date_str = dt.strftime("%Y-%m-%d")
-            results[date_str] = round(rv, 4)
+            rv = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR) * 100
+            # times[end] is the candle that completes this window
+            dt = datetime.fromtimestamp(times[end] / 1000, tz=timezone.utc)
+            key = dt.strftime("%Y-%m-%d %H")
+            results[key] = round(rv, 4)
 
         self._rolling_cache[cache_key] = (now, results)
         return results
