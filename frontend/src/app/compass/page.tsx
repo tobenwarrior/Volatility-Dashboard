@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useAssetData } from "@/hooks/useAssetData";
 import { useCompassData } from "@/hooks/useCompassData";
-import { useRVSeries } from "@/hooks/useRVSeries";
 import PriceTicker from "@/components/PriceTicker";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import StatusBadge from "@/components/StatusBadge";
-import { TIME_RANGE_HOURS } from "@/types";
 
 const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
-const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
 
 export default function CompassPage() {
   const btc = useAssetData("BTC");
@@ -26,12 +23,9 @@ export default function CompassPage() {
   const btcCompass = useCompassData("BTC", btc.selectedTenor, btc.selectedRange, btcIV);
   const ethCompass = useCompassData("ETH", eth.selectedTenor, eth.selectedRange, ethIV);
 
-  const btcRV = useRVSeries(btc.selectedTenor, "BTC", true, TIME_RANGE_HOURS[btc.selectedRange]);
-  const ethRV = useRVSeries(eth.selectedTenor, "ETH", true, TIME_RANGE_HOURS[eth.selectedRange]);
-
   const assets = [
-    { asset: "BTC" as const, d: btc, compass: btcCompass, rv: btcRV },
-    { asset: "ETH" as const, d: eth, compass: ethCompass, rv: ethRV },
+    { asset: "BTC" as const, d: btc, compass: btcCompass },
+    { asset: "ETH" as const, d: eth, compass: ethCompass },
   ];
 
   return (
@@ -65,44 +59,6 @@ export default function CompassPage() {
               stale={d.stale}
               asset={asset}
             />
-          </div>
-        ))}
-
-        {/* IV vs RV Historical Charts */}
-        {ready && assets.map(({ asset, d, rv }) => (
-          <div
-            key={`history-${asset}`}
-            className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
-          >
-            <div className="mb-4 space-y-3">
-              <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
-                IV vs RV
-              </h3>
-              <div className="flex flex-wrap items-center gap-3">
-                <TenorSelector
-                  selected={d.selectedTenor}
-                  onChange={d.setSelectedTenor}
-                />
-                <div className="h-4 w-px bg-white/[0.08]" />
-                <TimeRangeSelector
-                  selected={d.selectedRange}
-                  onChange={d.setSelectedRange}
-                />
-              </div>
-            </div>
-            {d.historyData.length > 0 ? (
-              <IvChart
-                key={`${asset}-${d.selectedTenor}-${d.selectedRange}`}
-                data={d.historyData}
-                tenor={d.selectedTenor}
-                showRV={true}
-                rvData={rv}
-              />
-            ) : (
-              <div className="flex h-[360px] items-center justify-center">
-                <p className="text-sm text-white/40">Loading chart data...</p>
-              </div>
-            )}
           </div>
         ))}
 

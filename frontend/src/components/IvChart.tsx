@@ -42,7 +42,7 @@ function toLineData(
   return out;
 }
 
-function rvToLineData(raw: RVPoint[]): LineData<UTCTimestamp>[] {
+function rvToLineData(raw: RVPoint[], ivData: HistoryPoint[]): LineData<UTCTimestamp>[] {
   const out: LineData<UTCTimestamp>[] = [];
   let prevTime = -1;
   for (const point of raw) {
@@ -50,6 +50,16 @@ function rvToLineData(raw: RVPoint[]): LineData<UTCTimestamp>[] {
     if (t <= prevTime) continue;
     prevTime = t;
     out.push({ time: t as UTCTimestamp, value: point.rv });
+  }
+  // If only 1 point, stretch it across the IV data range as a flat line
+  if (out.length === 1 && ivData.length > 1) {
+    const rv = out[0].value;
+    const firstIV = ivData[0].time + SGT_OFFSET;
+    const lastIV = ivData[ivData.length - 1].time + SGT_OFFSET;
+    return [
+      { time: firstIV as UTCTimestamp, value: rv },
+      { time: lastIV as UTCTimestamp, value: rv },
+    ];
   }
   return out;
 }
@@ -262,7 +272,7 @@ const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
 export default function IvChart({ data, tenor, resetCounter = 0, showRV = false, rvData = [] }: IvChartProps) {
-  const rvLineData = rvToLineData(rvData);
+  const rvLineData = rvToLineData(rvData, data);
 
   return (
     <div className="space-y-4">
