@@ -31,7 +31,6 @@ export default function CompassPage() {
   return (
     <main className="mx-auto min-h-screen max-w-[1920px] px-4 py-4 lg:px-6 lg:py-5">
       <header className="mb-5 flex items-center gap-4">
-        <h1 className="text-lg font-semibold tracking-tight">Vol Compass & RV</h1>
         <div className="ml-auto flex items-center gap-2">
           {btc.data?.timestamp && (
             <span className="hidden text-xs text-white/30 lg:inline">
