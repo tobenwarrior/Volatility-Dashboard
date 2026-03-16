@@ -10,8 +10,10 @@ import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 import { useRVSeries } from "@/hooks/useRVSeries";
+import { useCompassData } from "@/hooks/useCompassData";
 import { TIME_RANGE_HOURS } from "@/types";
 
+const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
 const TermStructureChart = dynamic(() => import("@/components/TermStructureChart"), {
   loading: () => <p className="py-10 text-center text-sm text-white/40">Loading...</p>,
@@ -25,18 +27,28 @@ const DEFAULT_SECTIONS: Section[] = [
   { id: "iv-change", label: "ATM IV vs 24h Change", visible: true },
   { id: "historical", label: "Historical Charts", visible: true },
   { id: "vol-stats", label: "Vol Stats", visible: true },
+  { id: "vol-compass", label: "Vol Compass", visible: true },
 ];
 
-const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-stats"]);
+const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-compass", "vol-stats"]);
 
 export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
+  const [showCompassHelp, setShowCompassHelp] = useState(false);
   const btcRV = useRVSeries(btc.selectedTenor, "BTC", showRV["BTC"] ?? false, TIME_RANGE_HOURS[btc.selectedRange]);
   const ethRV = useRVSeries(eth.selectedTenor, "ETH", showRV["ETH"] ?? false, TIME_RANGE_HOURS[eth.selectedRange]);
   const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
+
+  // Compass state — reuses selectedTenor/Range from asset data
+  const btcIV = btc.data?.tenors?.find((t) => t.label === btc.selectedTenor)?.atm_iv ?? null;
+  const ethIV = eth.data?.tenors?.find((t) => t.label === eth.selectedTenor)?.atm_iv ?? null;
+  const btcCompass = useCompassData("BTC", btc.selectedTenor, btc.selectedRange, btcIV);
+  const ethCompass = useCompassData("ETH", eth.selectedTenor, eth.selectedRange, ethIV);
+  const compassData: Record<string, typeof btcCompass> = { BTC: btcCompass, ETH: ethCompass };
+
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); }, []);
@@ -145,6 +157,55 @@ export default function Home() {
                 rvData={rvData[asset]}
               />
             )}
+          </div>
+        ));
+
+      case "vol-compass":
+        return assets.map(({ asset, d }) => (
+          <div
+            key={`compass-${asset}`}
+            className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
+          >
+            <div className="mb-4 space-y-3">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
+                Vol Compass
+              </h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <TenorSelector
+                  selected={d.selectedTenor}
+                  onChange={d.setSelectedTenor}
+                />
+                <div className="h-4 w-px bg-white/[0.08]" />
+                <TimeRangeSelector
+                  selected={d.selectedRange}
+                  onChange={d.setSelectedRange}
+                />
+                <div className="h-4 w-px bg-white/[0.08]" />
+                <button
+                  onClick={() => setShowCompassHelp((p) => !p)}
+                  className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
+                    showCompassHelp
+                      ? "border-white/40 text-white/70"
+                      : "border-white/20 text-white/40 hover:border-white/40 hover:text-white/70"
+                  }`}
+                  title="How to read this compass"
+                >
+                  ?
+                </button>
+              </div>
+            </div>
+            <VolCompass
+              current={compassData[asset].current}
+              lastWeek={compassData[asset].lastWeek}
+              lastMonth={compassData[asset].lastMonth}
+              carry={compassData[asset].carry}
+              ivPercentile={compassData[asset].ivPercentile}
+              currentIV={compassData[asset].currentIV}
+              rv={compassData[asset].rv}
+              loading={compassData[asset].loading}
+              tenor={d.selectedTenor}
+              showHelp={showCompassHelp}
+            />
           </div>
         ));
 

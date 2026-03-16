@@ -14,7 +14,7 @@ function PercentileCell({ value }: { value: number | null }) {
       : value <= 30
         ? "text-deribit-green"
         : "text-white/80";
-  return <span className={color}>{Math.round(value)}th</span>;
+  return <span className={color}>{Math.round(value)}%</span>;
 }
 
 function ZScoreCell({ value }: { value: number | null }) {
