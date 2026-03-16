@@ -46,7 +46,11 @@ export function useCompassData(
   const compute = useCallback(async () => {
     try {
       const tenorDays = TENOR_DAYS[tenor];
-      if (!tenorDays || currentIV === null) return;
+      if (!tenorDays) return;
+      if (currentIV === null) {
+        // IV not loaded yet — don't fetch, wait for re-trigger when currentIV changes
+        return;
+      }
 
       const tenorHours = tenorDays * 24;
       const rangeHours = TIME_RANGE_HOURS[range];
@@ -153,8 +157,10 @@ export function useCompassData(
 
   useEffect(() => {
     compute();
+    // Retry after 5s in case initial fetch was rate-limited
+    const retryId = setTimeout(compute, 5000);
     const id = setInterval(compute, 300_000);
-    return () => clearInterval(id);
+    return () => { clearTimeout(retryId); clearInterval(id); };
   }, [compute]);
 
   return data;
