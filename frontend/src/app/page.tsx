@@ -27,7 +27,7 @@ const DEFAULT_SECTIONS: Section[] = [
   { id: "iv-change", label: "ATM IV vs 24h Change", visible: true },
   { id: "historical", label: "Historical Charts", visible: true },
   { id: "vol-stats", label: "Vol Stats", visible: true },
-  { id: "vol-compass", label: "Vol Compass", visible: true },
+  // { id: "vol-compass", label: "Vol Compass", visible: true },
 ];
 
 const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-compass", "vol-stats"]);
@@ -121,6 +121,7 @@ export default function Home() {
                   selected={d.selectedRange}
                   onChange={d.setSelectedRange}
                 />
+                {/* RV checkbox hidden — porting to separate site
                 <div className="h-4 w-px bg-white/[0.08]" />
                 <label className="flex cursor-pointer items-center gap-1.5 text-xs">
                   <input
@@ -133,6 +134,7 @@ export default function Home() {
                   />
                   <span className="font-medium text-amber-500">RV</span>
                 </label>
+                */}
               </div>
             </div>
 
