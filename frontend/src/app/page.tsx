@@ -11,7 +11,7 @@ import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 import { useRVSeries } from "@/hooks/useRVSeries";
 import { useCompassData } from "@/hooks/useCompassData";
-import { TIME_RANGE_HOURS } from "@/types";
+import { TIME_RANGE_HOURS, type TenorLabel, type TimeRange } from "@/types";
 
 const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
@@ -27,7 +27,7 @@ const DEFAULT_SECTIONS: Section[] = [
   { id: "iv-change", label: "ATM IV vs 24h Change", visible: true },
   { id: "historical", label: "Historical Charts", visible: true },
   { id: "vol-stats", label: "Vol Stats", visible: true },
-  // { id: "vol-compass", label: "Vol Compass", visible: true },
+  { id: "vol-compass", label: "Vol Compass", visible: true },
 ];
 
 const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-compass", "vol-stats"]);
@@ -36,17 +36,29 @@ export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [showIV, setShowIV] = useState<Record<string, boolean>>({ BTC: true, ETH: true });
   const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
+  const [showCarry, setShowCarry] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
   const [showCompassHelp, setShowCompassHelp] = useState(false);
-  const btcRV = useRVSeries(btc.selectedTenor, "BTC", showRV["BTC"] ?? false, TIME_RANGE_HOURS[btc.selectedRange]);
-  const ethRV = useRVSeries(eth.selectedTenor, "ETH", showRV["ETH"] ?? false, TIME_RANGE_HOURS[eth.selectedRange]);
+  const btcRVEnabled = (showRV["BTC"] ?? false) || (showCarry["BTC"] ?? false);
+  const ethRVEnabled = (showRV["ETH"] ?? false) || (showCarry["ETH"] ?? false);
+  const btcRV = useRVSeries(btc.selectedTenor, "BTC", btcRVEnabled, TIME_RANGE_HOURS[btc.selectedRange]);
+  const ethRV = useRVSeries(eth.selectedTenor, "ETH", ethRVEnabled, TIME_RANGE_HOURS[eth.selectedRange]);
   const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
 
-  // Compass state — reuses selectedTenor/Range from asset data
-  const btcIV = btc.data?.tenors?.find((t) => t.label === btc.selectedTenor)?.atm_iv ?? null;
-  const ethIV = eth.data?.tenors?.find((t) => t.label === eth.selectedTenor)?.atm_iv ?? null;
-  const btcCompass = useCompassData("BTC", btc.selectedTenor, btc.selectedRange, btcIV);
-  const ethCompass = useCompassData("ETH", eth.selectedTenor, eth.selectedRange, ethIV);
+  // Compass state — independent tenor and range
+  const [compassTenor, setCompassTenor] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
+  const [compassRange, setCompassRange] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
+  const COMPASS_RANGE_HOURS: Record<TenorLabel, number> = { "1W": 168, "2W": 336, "30D": 720, "60D": 1440, "90D": 2160, "180D": 4320 };
+  const compassRangeToTimeRange = (r: TenorLabel): TimeRange => r === "1W" ? "7D" : r === "2W" ? "14D" : "30D";
+  const btcCT = compassTenor["BTC"] ?? "30D";
+  const ethCT = compassTenor["ETH"] ?? "30D";
+  const btcCR = compassRange["BTC"] ?? "30D";
+  const ethCR = compassRange["ETH"] ?? "30D";
+  const btcIV = btc.data?.tenors?.find((t) => t.label === btcCT)?.atm_iv ?? null;
+  const ethIV = eth.data?.tenors?.find((t) => t.label === ethCT)?.atm_iv ?? null;
+  const btcCompass = useCompassData("BTC", btcCT, compassRangeToTimeRange(btcCR), btcIV);
+  const ethCompass = useCompassData("ETH", ethCT, compassRangeToTimeRange(ethCR), ethIV);
   const compassData: Record<string, typeof btcCompass> = { BTC: btcCompass, ETH: ethCompass };
 
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
@@ -111,30 +123,52 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
                 <TenorSelector
                   selected={d.selectedTenor}
                   onChange={d.setSelectedTenor}
                 />
-                <div className="h-4 w-px bg-white/[0.08]" />
+                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
                 <TimeRangeSelector
                   selected={d.selectedRange}
                   onChange={d.setSelectedRange}
                 />
-                {/* RV checkbox hidden — porting to separate site
-                <div className="h-4 w-px bg-white/[0.08]" />
-                <label className="flex cursor-pointer items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={showRV[asset] ?? false}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setShowRV((prev) => ({ ...prev, [asset]: e.target.checked }))
-                    }
-                    className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
-                  />
-                  <span className="font-medium text-amber-500">RV</span>
-                </label>
-                */}
+                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
+                <div className="flex shrink-0 items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={showIV[asset] ?? true}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setShowIV((prev) => ({ ...prev, [asset]: e.target.checked }))
+                      }
+                      className="h-3 w-3 rounded border-white/20 bg-white/10 accent-blue-500"
+                    />
+                    <span className="font-medium text-blue-400">IV</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={showRV[asset] ?? false}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setShowRV((prev) => ({ ...prev, [asset]: e.target.checked }))
+                      }
+                      className="h-3 w-3 rounded border-white/20 bg-white/10 accent-amber-500"
+                    />
+                    <span className="font-medium text-amber-500">RV</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={showCarry[asset] ?? false}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setShowCarry((prev) => ({ ...prev, [asset]: e.target.checked }))
+                      }
+                      className="h-3 w-3 rounded border-white/20 bg-white/10 accent-purple-500"
+                    />
+                    <span className="font-medium text-purple-400">Carry</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -155,7 +189,9 @@ export default function Home() {
                 data={d.historyData}
                 tenor={d.selectedTenor}
                 resetCounter={resetCounters[asset] ?? 0}
+                showIV={showIV[asset] ?? true}
                 showRV={showRV[asset] ?? false}
+                showCarry={showCarry[asset] ?? false}
                 rvData={rvData[asset]}
               />
             )}
@@ -163,7 +199,7 @@ export default function Home() {
         ));
 
       case "vol-compass":
-        return assets.map(({ asset, d }) => (
+        return assets.map(({ asset }) => (
           <div
             key={`compass-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
@@ -172,20 +208,32 @@ export default function Home() {
               <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
                 Vol Compass
               </h3>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
                 <TenorSelector
-                  selected={d.selectedTenor}
-                  onChange={d.setSelectedTenor}
+                  selected={compassTenor[asset] ?? "30D"}
+                  onChange={(t) => setCompassTenor((prev) => ({ ...prev, [asset]: t }))}
                 />
-                <div className="h-4 w-px bg-white/[0.08]" />
-                <TimeRangeSelector
-                  selected={d.selectedRange}
-                  onChange={d.setSelectedRange}
-                />
-                <div className="h-4 w-px bg-white/[0.08]" />
+                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Range</span>
+                  {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setCompassRange((prev) => ({ ...prev, [asset]: r }))}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        r === (compassRange[asset] ?? "30D")
+                          ? "bg-deribit-blue text-white"
+                          : "bg-white/[0.06] text-deribit-gray hover:bg-white/[0.1] hover:text-white"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
                 <button
                   onClick={() => setShowCompassHelp((p) => !p)}
-                  className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
                     showCompassHelp
                       ? "border-white/40 text-white/70"
                       : "border-white/20 text-white/40 hover:border-white/40 hover:text-white/70"
@@ -205,8 +253,10 @@ export default function Home() {
               currentIV={compassData[asset].currentIV}
               rv={compassData[asset].rv}
               loading={compassData[asset].loading}
-              tenor={d.selectedTenor}
+              tenor={compassTenor[asset] ?? "30D"}
               showHelp={showCompassHelp}
+              rangeLabel={compassRange[asset] ?? "30D"}
+              ivHistoryDays={compassData[asset].ivHistoryDays}
             />
           </div>
         ));

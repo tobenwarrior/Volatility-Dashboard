@@ -19,6 +19,7 @@ export interface CompassData {
   rv: number | null;
   currentIV: number | null;
   loading: boolean;
+  ivHistoryDays: number | null; // actual days of IV history available
 }
 
 function percentileRank(values: number[], target: number): number {
@@ -41,6 +42,7 @@ export function useCompassData(
     rv: null,
     currentIV: null,
     loading: true,
+    ivHistoryDays: null,
   });
 
   const compute = useCallback(async () => {
@@ -140,6 +142,14 @@ export function useCompassData(
         }
       }
 
+      // Compute actual IV history span in days
+      let ivHistoryDays: number | null = null;
+      if (historyPoints.length >= 2) {
+        const first = historyPoints[0].time;
+        const last = historyPoints[historyPoints.length - 1].time;
+        ivHistoryDays = Math.round((last - first) / 86400 * 10) / 10;
+      }
+
       setData({
         current,
         lastWeek,
@@ -149,6 +159,7 @@ export function useCompassData(
         rv: rv !== null ? Math.round(rv * 100) / 100 : null,
         currentIV,
         loading: false,
+        ivHistoryDays,
       });
     } catch {
       setData((prev) => ({ ...prev, loading: false }));

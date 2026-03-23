@@ -19,7 +19,9 @@ interface IvChartProps {
   data: HistoryPoint[];
   tenor: string;
   resetCounter?: number;
+  showIV?: boolean;
   showRV?: boolean;
+  showCarry?: boolean;
   rvData?: RVPoint[];
 }
 
@@ -67,7 +69,52 @@ function rvToLineData(raw: RVPoint[], ivData: HistoryPoint[]): LineData<UTCTimes
 const IV_COLOR = "#4d8dff";
 const RR_COLOR = "#21c97e";
 const RV_COLOR = "#f59e0b";
+const CARRY_COLOR = "#a78bfa"; // purple
 const T1_COLOR = "rgba(255, 255, 255, 0.25)";
+
+/** Compute carry (IV - RV) line data. */
+function computeCarryLineData(
+  ivData: HistoryPoint[],
+  rvLineData: LineData<UTCTimestamp>[]
+): { carryData: LineData<UTCTimestamp>[] } {
+  const carryData: LineData<UTCTimestamp>[] = [];
+  if (ivData.length === 0 || rvLineData.length === 0) return { carryData };
+
+  const rvMap = new Map<number, number>();
+  for (const pt of rvLineData) {
+    rvMap.set(pt.time as number, pt.value);
+  }
+
+  let prevTime = -1;
+  for (const point of ivData) {
+    if (point.atm_iv == null) continue;
+    const t = point.time + SGT_OFFSET;
+    if (t <= prevTime) continue;
+    prevTime = t;
+
+    const hourFloor = t - (t % 3600);
+    const rvVal = rvMap.get(hourFloor) ?? rvMap.get(hourFloor - 3600) ?? rvMap.get(hourFloor + 3600);
+    if (rvVal !== undefined) {
+      carryData.push({ time: t as UTCTimestamp, value: Math.round((point.atm_iv - rvVal) * 100) / 100 });
+    }
+  }
+
+  // If only 1 RV point (1H range), use it for all IV points
+  if (carryData.length <= 1 && rvLineData.length >= 1) {
+    const singleRV = rvLineData[0].value;
+    carryData.length = 0;
+    let prev = -1;
+    for (const point of ivData) {
+      if (point.atm_iv == null) continue;
+      const t = point.time + SGT_OFFSET;
+      if (t <= prev) continue;
+      prev = t;
+      carryData.push({ time: t as UTCTimestamp, value: Math.round((point.atm_iv - singleRV) * 100) / 100 });
+    }
+  }
+
+  return { carryData };
+}
 
 const CHART_OPTIONS = {
   layout: {
@@ -103,9 +150,11 @@ function SingleChart({
   t1Value,
   resetCounter,
   rvLineData,
+  overrideLineData,
   overlayColor,
   overlayLabel,
   showOverlay,
+  hideMainLine,
 }: {
   data: HistoryPoint[];
   field: "atm_iv" | "rr_25d";
@@ -116,9 +165,11 @@ function SingleChart({
   t1Value: number | null;
   resetCounter: number;
   rvLineData?: LineData<UTCTimestamp>[];
+  overrideLineData?: LineData<UTCTimestamp>[];
   overlayColor?: string;
   overlayLabel?: string;
   showOverlay?: boolean;
+  hideMainLine?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -132,7 +183,7 @@ function SingleChart({
 
     const chart = createChart(containerRef.current, {
       ...CHART_OPTIONS,
-      leftPriceScale: { visible: false },
+      leftPriceScale: { visible: false, borderColor: "rgba(255,255,255,0.08)" },
       width: containerRef.current.clientWidth,
       height,
     });
@@ -211,11 +262,21 @@ function SingleChart({
     }
   }, [resetCounter]);
 
+  // Toggle main line visibility
+  useEffect(() => {
+    if (!seriesRef.current) return;
+    seriesRef.current.applyOptions({
+      color: hideMainLine ? "transparent" : color,
+      lastValueVisible: !hideMainLine,
+      crosshairMarkerVisible: !hideMainLine,
+    });
+  }, [hideMainLine, color]);
+
   // Update main data + T-1 reference line
   useEffect(() => {
     if (!chartRef.current || !seriesRef.current) return;
 
-    const lineData = toLineData(data, field);
+    const lineData = overrideLineData ?? toLineData(data, field);
     seriesRef.current.setData(lineData);
 
     if (priceLineRef.current) {
@@ -271,8 +332,11 @@ function SingleChart({
 const ivFormatter = (p: number) => p.toFixed(2) + "%";
 const rrFormatter = (p: number) => p.toFixed(2);
 
-export default function IvChart({ data, tenor, resetCounter = 0, showRV = false, rvData = [] }: IvChartProps) {
+const carryFormatter = (p: number) => (p >= 0 ? "+" : "") + p.toFixed(2);
+
+export default function IvChart({ data, tenor, resetCounter = 0, showIV = true, showRV = false, showCarry = false, rvData = [] }: IvChartProps) {
   const rvLineData = rvToLineData(rvData, data);
+  const { carryData } = computeCarryLineData(data, rvLineData);
 
   return (
     <div className="space-y-4">
@@ -282,14 +346,28 @@ export default function IvChart({ data, tenor, resetCounter = 0, showRV = false,
         color={IV_COLOR}
         label="ATM IV (%)"
         formatter={ivFormatter}
-        height={160}
+        height={200}
         t1Value={null}
         resetCounter={resetCounter}
         rvLineData={rvLineData}
         overlayColor={RV_COLOR}
         overlayLabel="RV (%)"
         showOverlay={showRV}
+        hideMainLine={!showIV}
       />
+      {showCarry && carryData.length > 0 && (
+        <SingleChart
+          data={data}
+          field="atm_iv"
+          color={CARRY_COLOR}
+          label="Carry (IV&minus;RV)"
+          formatter={carryFormatter}
+          height={100}
+          t1Value={null}
+          resetCounter={resetCounter}
+          overrideLineData={carryData}
+        />
+      )}
       <SingleChart
         data={data}
         field="rr_25d"

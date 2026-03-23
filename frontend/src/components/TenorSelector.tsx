@@ -9,7 +9,7 @@ interface TenorSelectorProps {
 
 export default function TenorSelector({ selected, onChange }: TenorSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Tenor</span>
       {TENORS.map((t) => (
         <button

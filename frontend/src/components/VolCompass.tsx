@@ -13,6 +13,8 @@ interface VolCompassProps {
   loading: boolean;
   tenor: string;
   showHelp: boolean;
+  rangeLabel: string;
+  ivHistoryDays: number | null;
 }
 
 function getStrategy(m: CompassMarker): string {
@@ -108,6 +110,8 @@ export default function VolCompass({
   loading,
   tenor,
   showHelp,
+  rangeLabel,
+  ivHistoryDays,
 }: VolCompassProps) {
   const strategy = current ? getStrategy(current) : null;
   const ringStyle = {
@@ -137,7 +141,63 @@ export default function VolCompass({
           </p>
         </div>
       )}
-      <svg viewBox="0 0 400 400" className="w-full max-w-[360px]">
+      <div className="relative w-full max-w-[360px]">
+      {/* HTML tooltip hit areas over the SVG */}
+      {!loading && current && (() => {
+        const pos = markerPos(current);
+        return (
+          <div
+            className="group absolute z-10"
+            style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
+          >
+            <div className="h-10 w-10 cursor-pointer" />
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
+              <div className="mb-1 font-bold text-[#22c55e]">Current</div>
+              <div className="text-white/70">Strategy: <span className="text-white">{strategy}</span></div>
+              <div className="text-white/70">IV Pctl: <span className="text-white">{current.ivPct.toFixed(1)}%</span></div>
+              <div className="text-white/70">Spot Pctl: <span className="text-white">{current.spotPct.toFixed(1)}%</span></div>
+              {carry !== null && <div className="text-white/70">Carry: <span className={carry >= 0 ? "text-green-400" : "text-red-400"}>{carry >= 0 ? "+" : ""}{carry.toFixed(2)}</span></div>}
+            </div>
+          </div>
+        );
+      })()}
+      {!loading && lastWeek && (() => {
+        const pos = markerPos(lastWeek);
+        const strat = getStrategy(lastWeek);
+        return (
+          <div
+            className="group absolute z-10"
+            style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
+          >
+            <div className="h-10 w-10 cursor-pointer" />
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
+              <div className="mb-1 font-bold text-white/60">Last Week</div>
+              <div className="text-white/70">Strategy: <span className="text-white">{strat}</span></div>
+              <div className="text-white/70">IV Pctl: <span className="text-white">{lastWeek.ivPct.toFixed(1)}%</span></div>
+              <div className="text-white/70">Spot Pctl: <span className="text-white">{lastWeek.spotPct.toFixed(1)}%</span></div>
+            </div>
+          </div>
+        );
+      })()}
+      {!loading && lastMonth && (() => {
+        const pos = markerPos(lastMonth);
+        const strat = getStrategy(lastMonth);
+        return (
+          <div
+            className="group absolute z-10"
+            style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
+          >
+            <div className="h-10 w-10 cursor-pointer" />
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
+              <div className="mb-1 font-bold text-white/40">Last Month</div>
+              <div className="text-white/70">Strategy: <span className="text-white">{strat}</span></div>
+              <div className="text-white/70">IV Pctl: <span className="text-white">{lastMonth.ivPct.toFixed(1)}%</span></div>
+              <div className="text-white/70">Spot Pctl: <span className="text-white">{lastMonth.spotPct.toFixed(1)}%</span></div>
+            </div>
+          </div>
+        );
+      })()}
+      <svg viewBox="0 0 400 400" className="w-full">
         <defs>
           <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="4" result="blur" />
@@ -314,6 +374,7 @@ export default function VolCompass({
           </text>
         )}
       </svg>
+      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 text-[10px] text-white/50">
@@ -330,6 +391,19 @@ export default function VolCompass({
           CURRENT
         </span>
       </div>
+
+      {/* History warning */}
+      {ivHistoryDays !== null && (() => {
+        const rangeDays: Record<string, number> = { "1W": 7, "2W": 14, "30D": 30, "60D": 60, "90D": 90, "180D": 180 };
+        const needed = rangeDays[rangeLabel] ?? 30;
+        const pct = Math.min(100, Math.round((ivHistoryDays / needed) * 100));
+        if (pct >= 90) return null;
+        return (
+          <div className="w-full rounded-md bg-amber-500/10 px-3 py-1.5 text-center text-[10px] text-amber-400">
+            IV history: {ivHistoryDays.toFixed(0)}d / {needed}d ({pct}%) — percentiles may be less accurate
+          </div>
+        );
+      })()}
 
       {/* Metrics */}
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs">

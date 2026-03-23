@@ -9,7 +9,7 @@ interface TimeRangeSelectorProps {
 
 export default function TimeRangeSelector({ selected, onChange }: TimeRangeSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Range</span>
       {RANGES.map((r) => (
         <button

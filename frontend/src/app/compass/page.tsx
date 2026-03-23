@@ -106,6 +106,8 @@ export default function CompassPage() {
               loading={compass.loading}
               tenor={d.selectedTenor}
               showHelp={showCompassHelp}
+              rangeLabel={d.selectedRange}
+              ivHistoryDays={compass.ivHistoryDays}
             />
           </div>
         ))}
