@@ -25,7 +25,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class HistoryStore:
     """Manages iv_snapshots with in-memory reads and batched DB writes."""
 
-    def __init__(self, db_url=None, db_write_every=5):
+    def __init__(self, db_url=None, db_write_every=10):
         self._db_url = db_url or DATABASE_URL
         self._pool = psycopg2.pool.ThreadedConnectionPool(1, 5, self._db_url)
         self._ensure_db()
