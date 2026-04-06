@@ -277,7 +277,7 @@ export default function Home() {
   };
 
   return (
-    <main className="mx-auto min-h-screen max-w-[1920px] px-4 py-4 lg:px-6 lg:py-5">
+    <main className="mx-auto min-h-screen px-4 py-4 lg:px-6 lg:py-5">
       <header className="mb-5 flex items-center gap-4">
         <LayoutMenu sections={sections} onChange={setSections} />
         <div className="ml-auto flex items-center gap-2">
