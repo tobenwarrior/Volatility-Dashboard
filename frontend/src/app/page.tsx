@@ -227,7 +227,7 @@ export default function Home() {
                 </div>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
                 <div className="flex items-center gap-1.5">
-                  {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
+                  {(["1W", "2W", "30D"] as TenorLabel[]).map((r) => (
                     <button
                       key={r}
                       onClick={() => setCompassRange((prev) => ({ ...prev, [asset]: r }))}

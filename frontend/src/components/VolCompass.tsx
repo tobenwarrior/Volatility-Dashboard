@@ -266,19 +266,6 @@ export default function VolCompass({
           );
         })()}
 
-        {/* Axis percentile indicators */}
-        {!loading && current && (
-          <>
-            {/* IV percentile on right side of vertical axis */}
-            <text x={CX + 8} y={CY - R_OUTER + 14} textAnchor="start" fill="rgba(255,255,255,0.4)" fontSize="8">
-              IV Pctl: {current.ivPct.toFixed(0)}%
-            </text>
-            {/* Spot percentile on bottom of horizontal axis */}
-            <text x={CX + R_OUTER - 5} y={CY + 14} textAnchor="end" fill="rgba(255,255,255,0.4)" fontSize="8">
-              Spot Pctl: {current.spotPct.toFixed(0)}%
-            </text>
-          </>
-        )}
 
         {/* Loading state */}
         {loading && (
