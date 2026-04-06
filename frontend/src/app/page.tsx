@@ -123,7 +123,7 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <TenorSelector
                   selected={d.selectedTenor}
                   onChange={d.setSelectedTenor}
@@ -208,19 +208,30 @@ export default function Home() {
               <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
                 Vol Compass
               </h3>
-              <div className="flex items-center gap-2">
-                <TenorSelector
-                  selected={compassTenor[asset] ?? "30D"}
-                  onChange={(t) => setCompassTenor((prev) => ({ ...prev, [asset]: t }))}
-                />
-                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
+              <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Tenor</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
+                  {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setCompassTenor((prev) => ({ ...prev, [asset]: t }))}
+                      className={`w-11 rounded-md py-1.5 text-center text-xs font-medium transition-colors ${
+                        t === (compassTenor[asset] ?? "30D")
+                          ? "bg-deribit-blue text-white"
+                          : "bg-white/[0.06] text-deribit-gray hover:bg-white/[0.1] hover:text-white"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
+                <div className="flex items-center gap-1.5">
                   {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
                     <button
                       key={r}
                       onClick={() => setCompassRange((prev) => ({ ...prev, [asset]: r }))}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      className={`w-11 rounded-md py-1.5 text-center text-xs font-medium transition-colors ${
                         r === (compassRange[asset] ?? "30D")
                           ? "bg-deribit-blue text-white"
                           : "bg-white/[0.06] text-deribit-gray hover:bg-white/[0.1] hover:text-white"
@@ -229,19 +240,19 @@ export default function Home() {
                       {r}
                     </button>
                   ))}
+                  <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
+                  <button
+                    onClick={() => setShowCompassHelp((p) => !p)}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
+                      showCompassHelp
+                        ? "border-white/40 text-white/70"
+                        : "border-white/20 text-white/40 hover:border-white/40 hover:text-white/70"
+                    }`}
+                    title="How to read this compass"
+                  >
+                    ?
+                  </button>
                 </div>
-                <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
-                <button
-                  onClick={() => setShowCompassHelp((p) => !p)}
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
-                    showCompassHelp
-                      ? "border-white/40 text-white/70"
-                      : "border-white/20 text-white/40 hover:border-white/40 hover:text-white/70"
-                  }`}
-                  title="How to read this compass"
-                >
-                  ?
-                </button>
               </div>
             </div>
             <VolCompass
