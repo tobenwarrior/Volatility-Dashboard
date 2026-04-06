@@ -137,7 +137,7 @@ export default function VolCompass({
             <span className="text-white/60">Carry</span> = IV &minus; RV. Positive = options are rich (favor selling). Negative = options are cheap (favor buying).
           </p>
           <p className="text-white/40">
-            Crosses show how the regime shifted: <span className="text-[#22c55e]">green</span> = now, gray = last week/month.
+            The <span className="text-[#22c55e]">green cross</span> shows the current regime position. Hover for details.
           </p>
         </div>
       )}
@@ -150,49 +150,14 @@ export default function VolCompass({
             className="group absolute z-10"
             style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
           >
-            <div className="h-10 w-10 cursor-pointer" />
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
-              <div className="mb-1 font-bold text-[#22c55e]">Current</div>
-              <div className="text-white/70">Strategy: <span className="text-white">{strategy}</span></div>
+            <div className="h-12 w-12 cursor-pointer" />
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 180 }}>
+              <div className="mb-1 font-bold text-[#22c55e]">{strategy}</div>
               <div className="text-white/70">IV Pctl: <span className="text-white">{current.ivPct.toFixed(1)}%</span></div>
               <div className="text-white/70">Spot Pctl: <span className="text-white">{current.spotPct.toFixed(1)}%</span></div>
-              {carry !== null && <div className="text-white/70">Carry: <span className={carry >= 0 ? "text-green-400" : "text-red-400"}>{carry >= 0 ? "+" : ""}{carry.toFixed(2)}</span></div>}
-            </div>
-          </div>
-        );
-      })()}
-      {!loading && lastWeek && (() => {
-        const pos = markerPos(lastWeek);
-        const strat = getStrategy(lastWeek);
-        return (
-          <div
-            className="group absolute z-10"
-            style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
-          >
-            <div className="h-10 w-10 cursor-pointer" />
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
-              <div className="mb-1 font-bold text-white/60">Last Week</div>
-              <div className="text-white/70">Strategy: <span className="text-white">{strat}</span></div>
-              <div className="text-white/70">IV Pctl: <span className="text-white">{lastWeek.ivPct.toFixed(1)}%</span></div>
-              <div className="text-white/70">Spot Pctl: <span className="text-white">{lastWeek.spotPct.toFixed(1)}%</span></div>
-            </div>
-          </div>
-        );
-      })()}
-      {!loading && lastMonth && (() => {
-        const pos = markerPos(lastMonth);
-        const strat = getStrategy(lastMonth);
-        return (
-          <div
-            className="group absolute z-10"
-            style={{ left: `${pos.x / 4}%`, top: `${pos.y / 4}%`, transform: "translate(-50%,-50%)" }}
-          >
-            <div className="h-10 w-10 cursor-pointer" />
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-[11px] leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity group-hover:opacity-100" style={{ minWidth: 160 }}>
-              <div className="mb-1 font-bold text-white/40">Last Month</div>
-              <div className="text-white/70">Strategy: <span className="text-white">{strat}</span></div>
-              <div className="text-white/70">IV Pctl: <span className="text-white">{lastMonth.ivPct.toFixed(1)}%</span></div>
-              <div className="text-white/70">Spot Pctl: <span className="text-white">{lastMonth.spotPct.toFixed(1)}%</span></div>
+              {carry !== null && currentIV !== null && rv !== null && (
+                <div className="text-white/70">Carry: <span className={carry >= 0 ? "text-green-400" : "text-red-400"}>{currentIV.toFixed(1)}% &minus; {rv.toFixed(1)}% = {carry >= 0 ? "+" : ""}{carry.toFixed(2)}</span></div>
+              )}
             </div>
           </div>
         );
@@ -280,59 +245,7 @@ export default function VolCompass({
           STRANGLE
         </text>
 
-        {/* Left/right strategy labels */}
-        <text x={CX - R_MID + 5} y={CY - 6} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7.5" fontWeight="600">
-          BULLISH RISK
-        </text>
-        <text x={CX - R_MID + 5} y={CY + 3} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7.5" fontWeight="600">
-          REVERSAL
-        </text>
-
-        <text x={CX + R_MID - 5} y={CY - 6} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7.5" fontWeight="600">
-          BEARISH RISK
-        </text>
-        <text x={CX + R_MID - 5} y={CY + 3} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7.5" fontWeight="600">
-          REVERSAL
-        </text>
-
-        {/* Inner ring spread labels */}
-        <text x={CX - 30} y={CY - R_INNER + 18} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SELL PUT
-        </text>
-        <text x={CX - 30} y={CY - R_INNER + 26} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SPREAD
-        </text>
-
-        <text x={CX + 30} y={CY - R_INNER + 18} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SELL CALL
-        </text>
-        <text x={CX + 30} y={CY - R_INNER + 26} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SPREAD
-        </text>
-
-        <text x={CX - 30} y={CY + R_INNER - 12} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          BUY CALL
-        </text>
-        <text x={CX - 30} y={CY + R_INNER - 4} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SPREAD
-        </text>
-
-        <text x={CX + 30} y={CY + R_INNER - 12} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          BUY PUT
-        </text>
-        <text x={CX + 30} y={CY + R_INNER - 4} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="7">
-          SPREAD
-        </text>
-
-        {/* Markers */}
-        {!loading && lastMonth && (() => {
-          const pos = markerPos(lastMonth);
-          return <CrossMark x={pos.x} y={pos.y} size={7} color="rgba(255,255,255,0.4)" glow filterId="glow-month" />;
-        })()}
-        {!loading && lastWeek && (() => {
-          const pos = markerPos(lastWeek);
-          return <CrossMark x={pos.x} y={pos.y} size={10} color="rgba(255,255,255,0.6)" glow filterId="glow-week" />;
-        })()}
+        {/* Markers — current only */}
         {!loading && current && (() => {
           const pos = markerPos(current);
           return (
@@ -376,21 +289,6 @@ export default function VolCompass({
       </svg>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-[10px] text-white/50">
-        <span className="flex items-center gap-1">
-          <svg width="10" height="10"><line x1="1" y1="1" x2="9" y2="9" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" /><line x1="9" y1="1" x2="1" y2="9" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" /></svg>
-          LAST MONTH
-        </span>
-        <span className="flex items-center gap-1">
-          <svg width="12" height="12"><line x1="1" y1="1" x2="11" y2="11" stroke="rgba(255,255,255,0.5)" strokeWidth="2" /><line x1="11" y1="1" x2="1" y2="11" stroke="rgba(255,255,255,0.5)" strokeWidth="2" /></svg>
-          LAST WEEK
-        </span>
-        <span className="flex items-center gap-1">
-          <svg width="14" height="14"><line x1="1" y1="1" x2="13" y2="13" stroke="#22c55e" strokeWidth="2.5" /><line x1="13" y1="1" x2="1" y2="13" stroke="#22c55e" strokeWidth="2.5" /></svg>
-          CURRENT
-        </span>
-      </div>
 
       {/* History warning */}
       {ivHistoryDays !== null && (() => {
@@ -407,19 +305,25 @@ export default function VolCompass({
 
       {/* Metrics */}
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs">
-        <div className="flex items-center gap-1.5">
+        <div className="group relative flex items-center gap-1.5">
           <span className="font-semibold uppercase tracking-wider text-white/50">IV</span>
           <span className="font-mono font-bold tabular-nums text-blue-400">
             {currentIV !== null ? `${currentIV.toFixed(1)}%` : "—"}
           </span>
+          <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[10px] text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
+            {tenor} ATM IV from Deribit
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="group relative flex items-center gap-1.5">
           <span className="font-semibold uppercase tracking-wider text-white/50">RV</span>
           <span className="font-mono font-bold tabular-nums text-amber-400">
             {rv !== null ? `${rv.toFixed(1)}%` : "—"}
           </span>
+          <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[10px] text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
+            {tenor} RV from Binance Spot (hourly close-to-close)
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="group relative flex items-center gap-1.5">
           <span className="font-semibold uppercase tracking-wider text-white/50">Carry</span>
           <span className={`rounded px-1.5 py-0.5 font-mono font-bold tabular-nums ${
             carry !== null && carry >= 0
@@ -428,6 +332,11 @@ export default function VolCompass({
           }`}>
             {carry !== null ? carry.toFixed(2) : "—"}
           </span>
+          {carry !== null && currentIV !== null && rv !== null && (
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[10px] text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
+              {currentIV.toFixed(1)}% &minus; {rv.toFixed(1)}% = {carry >= 0 ? "+" : ""}{carry.toFixed(2)}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="font-semibold uppercase tracking-wider text-white/50">IV Pctl</span>

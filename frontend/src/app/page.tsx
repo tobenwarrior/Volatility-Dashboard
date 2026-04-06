@@ -215,7 +215,7 @@ export default function Home() {
                 />
                 <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Range</span>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
                   {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
                     <button
                       key={r}
