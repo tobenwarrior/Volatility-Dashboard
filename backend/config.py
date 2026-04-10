@@ -21,8 +21,10 @@ ASSETS = {
 # ---------------------------------------------------------------------------
 # Polling intervals
 # ---------------------------------------------------------------------------
-POLL_INTERVAL = 60  # seconds — full option chain + vol calc
-PRICE_INTERVAL = 5  # seconds — spot price only (reads WebSocket, no REST cost)
+POLL_INTERVAL = 60   # seconds — full option chain + vol calc (live dashboard)
+PRICE_INTERVAL = 5   # seconds — spot price only (reads WebSocket, no REST cost)
+SAVE_INTERVAL = 300  # seconds — how often to persist to in-mem cache + Postgres
+                     # (independent of POLL_INTERVAL; tuned so 180d fits the free tier)
 
 # ---------------------------------------------------------------------------
 # Volatility calculation
@@ -57,4 +59,4 @@ WS_SPOT_STALE_SECONDS = 5  # fall back to REST if WS spot older than this
 # ---------------------------------------------------------------------------
 # History database (Postgres via DATABASE_URL env var)
 # ---------------------------------------------------------------------------
-HISTORY_KEEP_DAYS = 30  # enough for 30D chart + T-1 overlay
+HISTORY_KEEP_DAYS = 180  # 180D lookback for Vol Compass (trader request)

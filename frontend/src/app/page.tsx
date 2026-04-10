@@ -11,7 +11,7 @@ import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 import { useRVSeries } from "@/hooks/useRVSeries";
 import { useCompassData } from "@/hooks/useCompassData";
-import { TIME_RANGE_HOURS, type TenorLabel, type TimeRange } from "@/types";
+import { TIME_RANGE_HOURS, type TenorLabel } from "@/types";
 
 const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
@@ -32,6 +32,15 @@ const DEFAULT_SECTIONS: Section[] = [
 
 const DEFERRED_SECTIONS = new Set(["iv-change", "historical", "vol-compass", "vol-stats"]);
 
+const COMPASS_RANGE_HOURS: Record<TenorLabel, number> = {
+  "1W": 168,
+  "2W": 336,
+  "30D": 720,
+  "60D": 1440,
+  "90D": 2160,
+  "180D": 4320,
+};
+
 export default function Home() {
   const btc = useAssetData("BTC");
   const eth = useAssetData("ETH");
@@ -46,19 +55,17 @@ export default function Home() {
   const ethRV = useRVSeries(eth.selectedTenor, "ETH", ethRVEnabled, TIME_RANGE_HOURS[eth.selectedRange]);
   const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
 
-  // Compass state — independent tenor and range
+  // Compass state — independent tenor and lookback range
   const [compassTenor, setCompassTenor] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
   const [compassRange, setCompassRange] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
-  const COMPASS_RANGE_HOURS: Record<TenorLabel, number> = { "1W": 168, "2W": 336, "30D": 720, "60D": 1440, "90D": 2160, "180D": 4320 };
-  const compassRangeToTimeRange = (r: TenorLabel): TimeRange => r === "1W" ? "7D" : r === "2W" ? "14D" : "30D";
   const btcCT = compassTenor["BTC"] ?? "30D";
   const ethCT = compassTenor["ETH"] ?? "30D";
   const btcCR = compassRange["BTC"] ?? "30D";
   const ethCR = compassRange["ETH"] ?? "30D";
   const btcIV = btc.data?.tenors?.find((t) => t.label === btcCT)?.atm_iv ?? null;
   const ethIV = eth.data?.tenors?.find((t) => t.label === ethCT)?.atm_iv ?? null;
-  const btcCompass = useCompassData("BTC", btcCT, compassRangeToTimeRange(btcCR), btcIV);
-  const ethCompass = useCompassData("ETH", ethCT, compassRangeToTimeRange(ethCR), ethIV);
+  const btcCompass = useCompassData("BTC", btcCT, COMPASS_RANGE_HOURS[btcCR], btcIV);
+  const ethCompass = useCompassData("ETH", ethCT, COMPASS_RANGE_HOURS[ethCR], ethIV);
   const compassData: Record<string, typeof btcCompass> = { BTC: btcCompass, ETH: ethCompass };
 
   const [resetCounters, setResetCounters] = useState<Record<string, number>>({ BTC: 0, ETH: 0 });
@@ -227,7 +234,7 @@ export default function Home() {
                 </div>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
                 <div className="flex items-center gap-1.5">
-                  {(["1W", "2W", "30D"] as TenorLabel[]).map((r) => (
+                  {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
                     <button
                       key={r}
                       onClick={() => setCompassRange((prev) => ({ ...prev, [asset]: r }))}

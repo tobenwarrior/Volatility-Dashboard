@@ -8,6 +8,7 @@ import PriceTicker from "@/components/PriceTicker";
 import TenorSelector from "@/components/TenorSelector";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
 import StatusBadge from "@/components/StatusBadge";
+import { TIME_RANGE_HOURS } from "@/types";
 
 const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
 
@@ -20,8 +21,8 @@ export default function CompassPage() {
 
   const btcIV = btc.data?.tenors?.find((t) => t.label === btc.selectedTenor)?.atm_iv ?? null;
   const ethIV = eth.data?.tenors?.find((t) => t.label === eth.selectedTenor)?.atm_iv ?? null;
-  const btcCompass = useCompassData("BTC", btc.selectedTenor, btc.selectedRange, btcIV);
-  const ethCompass = useCompassData("ETH", eth.selectedTenor, eth.selectedRange, ethIV);
+  const btcCompass = useCompassData("BTC", btc.selectedTenor, TIME_RANGE_HOURS[btc.selectedRange], btcIV);
+  const ethCompass = useCompassData("ETH", eth.selectedTenor, TIME_RANGE_HOURS[eth.selectedRange], ethIV);
 
   const assets = [
     { asset: "BTC" as const, d: btc, compass: btcCompass },

@@ -25,7 +25,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class HistoryStore:
     """Manages iv_snapshots with in-memory reads and batched DB writes."""
 
-    def __init__(self, db_url=None, db_write_every=10):
+    def __init__(self, db_url=None, db_write_every=2, save_interval_seconds=0):
         self._db_url = db_url or DATABASE_URL
         self._pool = psycopg2.pool.ThreadedConnectionPool(1, 5, self._db_url)
         self._ensure_db()
@@ -35,6 +35,13 @@ class HistoryStore:
         self._db_write_every = db_write_every
         self._write_counter = 0
         self._pending_rows = []
+
+        # Throttle cache+DB writes independent of poll cadence.
+        # save_snapshot() is called every POLL_INTERVAL, but we only persist
+        # once per save_interval_seconds — keeps 180d of history inside the
+        # Supabase free tier while the live dashboard still refreshes every poll.
+        self._save_interval = save_interval_seconds
+        self._last_save_ts = {}  # currency -> datetime of last persisted sample
 
         # In-memory cache: (currency, tenor) -> [(datetime, atm_iv, rr_25d, rv, bf_25d), ...]
         self._cache = {}
@@ -116,11 +123,35 @@ class HistoryStore:
     # ------------------------------------------------------------------
 
     def save_snapshot(self, timestamp, tenor_results, currency="BTC"):
-        """Append to in-memory cache (always) and batch for periodic DB flush."""
+        """Append to in-memory cache and batch for periodic DB flush.
+
+        If save_interval_seconds was set, drops samples that arrive sooner
+        than that interval (per-currency). The live dashboard is still fed
+        from the poller's in-memory latest snapshot, which is independent
+        of this cache.
+        """
         ts = self._parse_ts(timestamp)
+
+        # Skip incomplete samples where no tenor has 25Δ RR data. This is the
+        # signature of the startup race: the first poll runs ~1s after the WS
+        # subscribe() for ticker channels, so the 25Δ strikes haven't delivered
+        # quotes yet. Persisting such a sample would poison the cache's "latest"
+        # slot with rr_25d=None and break DoD computations until the next
+        # throttle-allowed save (up to save_interval_seconds later).
+        if not any(t.get("rr_25d") is not None for t in tenor_results):
+            return
 
         db_rows = []
         with self._cache_lock:
+            # Throttle under the same lock that guards the cache, so the
+            # read-check-write on _last_save_ts is trivially safe even if
+            # a future refactor adds more writer threads per currency.
+            if self._save_interval > 0:
+                last = self._last_save_ts.get(currency)
+                if last is not None and (ts - last).total_seconds() < self._save_interval:
+                    return
+                self._last_save_ts[currency] = ts
+
             for t in tenor_results:
                 key = (currency, t["label"])
                 if key not in self._cache:

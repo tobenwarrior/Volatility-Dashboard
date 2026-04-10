@@ -8,7 +8,7 @@ import logging
 import os
 
 from config import (
-    DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL,
+    DERIBIT_BASE, REQUEST_TIMEOUT, POLL_INTERVAL, PRICE_INTERVAL, SAVE_INTERVAL,
     TARGET_DAYS, TENORS, TARGET_DELTA, TICKER_CANDIDATES_PER_SIDE,
     ASSETS, DERIBIT_WS_URL, WS_SPOT_STALE_SECONDS,
 )
@@ -49,7 +49,7 @@ rr_calculator = RiskReversalCalculator(
     target_delta=TARGET_DELTA,
     ticker_store=ticker_store,
 )
-history_store = HistoryStore()
+history_store = HistoryStore(save_interval_seconds=SAVE_INTERVAL)
 rv_calculator = RealizedVolCalculator(client)
 
 # --- One poller per asset ---

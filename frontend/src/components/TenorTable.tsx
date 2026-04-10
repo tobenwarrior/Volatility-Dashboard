@@ -8,11 +8,16 @@ function formatAge(hours: number | null): string {
   if (hours == null) return "";
   if (hours >= 23 && hours <= 25) return "";  // ~24h, no label needed
   if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours >= 24) return `${Math.round(hours)}h`;
   return `${Math.round(hours)}h`;
 }
 
-function IvChange({ value, hours }: { value: number | null; hours: number | null }) {
+function formatSigned(value: number | null, digits = 2): string {
+  if (value == null) return "\u2014";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(digits)}`;
+}
+
+function ChangeCell({ value, hours }: { value: number | null; hours: number | null }) {
   if (value == null) return <span className="text-white/40">&mdash;</span>;
   const color =
     value > 0
@@ -20,87 +25,47 @@ function IvChange({ value, hours }: { value: number | null; hours: number | null
       : value < 0
         ? "text-deribit-red"
         : "text-white/60";
-  const sign = value > 0 ? "+" : "";
   const age = formatAge(hours);
   return (
     <span className={color}>
-      {sign}{value.toFixed(2)}
+      {formatSigned(value)}
       {age && <span className="ml-1 text-[10px] text-white/40">({age})</span>}
     </span>
   );
 }
 
-function SkewChange({ value, hours }: { value: number | null; hours: number | null }) {
-  if (value == null) return <span className="text-white/40">&mdash;</span>;
-  // Positive RR change = bullish shift (calls gaining), Negative = bearish shift
-  const color =
-    value > 0
-      ? "text-deribit-green"
-      : value < 0
-        ? "text-deribit-red"
-        : "text-white/60";
-  const sign = value > 0 ? "+" : "";
-  const age = formatAge(hours);
-  return (
-    <span className={color}>
-      {sign}{value.toFixed(2)}
-      {age && <span className="ml-1 text-[10px] text-white/40">({age})</span>}
-    </span>
-  );
-}
-
-function FlyChange({ value, hours }: { value: number | null; hours: number | null }) {
-  if (value == null) return <span className="text-white/40">&mdash;</span>;
-  // Positive BF change = wings richening (convexity expanding)
-  // Negative BF change = wings cheapening (convexity compressing)
-  const color =
-    value > 0
-      ? "text-deribit-green"
-      : value < 0
-        ? "text-deribit-red"
-        : "text-white/60";
-  const sign = value > 0 ? "+" : "";
-  const age = formatAge(hours);
-  return (
-    <span className={color}>
-      {sign}{value.toFixed(2)}
-      {age && <span className="ml-1 text-[10px] text-white/40">({age})</span>}
-    </span>
-  );
-}
+// Shared class strings so header + data cells stay visually aligned.
+const NUM_HEADER = "pb-3 text-center text-xs font-medium uppercase tracking-wider text-deribit-gray";
+const NUM_CELL = "py-3 text-center text-sm tabular-nums";
 
 function TenorRow({ tenor }: { tenor: TenorData }) {
+  const normRr =
+    tenor.rr_25d != null && tenor.atm_iv != null && tenor.atm_iv !== 0
+      ? tenor.rr_25d / tenor.atm_iv
+      : null;
+
   return (
     <tr className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors">
-      <td className="py-3 text-sm font-semibold text-white">
+      <td className="py-3 pl-1 text-left text-sm font-semibold text-white">
         {tenor.label}
       </td>
-      <td className="py-3 text-sm tabular-nums font-semibold text-deribit-blue">
+      <td className={`${NUM_CELL} font-semibold text-deribit-blue`}>
         {tenor.atm_iv != null ? `${tenor.atm_iv.toFixed(2)}%` : "\u2014"}
       </td>
-      <td className="py-3 text-sm tabular-nums">
-        <IvChange value={tenor.dod_iv_change} hours={tenor.change_hours} />
+      <td className={NUM_CELL}>
+        <ChangeCell value={tenor.dod_iv_change} hours={tenor.change_hours} />
       </td>
-      <td className="py-3 text-sm tabular-nums text-white">
-        {tenor.rr_25d != null
-          ? `${tenor.rr_25d > 0 ? "+" : ""}${tenor.rr_25d.toFixed(2)}`
-          : "\u2014"}
+      <td className={`${NUM_CELL} text-white`}>
+        {formatSigned(tenor.rr_25d)}
       </td>
-      <td className="py-3 text-sm tabular-nums">
-        <SkewChange value={tenor.dod_rr_change} hours={tenor.change_hours} />
+      <td className={NUM_CELL}>
+        <ChangeCell value={tenor.dod_rr_change} hours={tenor.change_hours} />
       </td>
-      <td className="py-3 text-sm tabular-nums">
-        <FlyChange value={tenor.dod_bf_change} hours={tenor.change_hours} />
+      <td className={`${NUM_CELL} text-white`}>
+        {formatSigned(tenor.bf_25d)}
       </td>
-      <td className="py-3 text-sm tabular-nums text-white">
-        {tenor.bf_25d != null
-          ? `${tenor.bf_25d > 0 ? "+" : ""}${tenor.bf_25d.toFixed(2)}`
-          : "\u2014"}
-      </td>
-      <td className="py-3 text-sm tabular-nums text-white/70">
-        {tenor.rr_25d != null && tenor.atm_iv != null && tenor.atm_iv !== 0
-          ? `${(tenor.rr_25d / tenor.atm_iv).toFixed(3)}`
-          : "\u2014"}
+      <td className={`${NUM_CELL} text-white/70`}>
+        {formatSigned(normRr, 3)}
       </td>
     </tr>
   );
@@ -114,33 +79,28 @@ export default function TenorTable({ tenors }: TenorTableProps) {
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-left">
+        <table className="w-full table-fixed">
+          {/* Narrower Tenor col gives the numerical columns more breathing room */}
+          <colgroup>
+            <col className="w-[9%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[16%]" />
+            <col className="w-[14%]" />
+            <col className="w-[19%]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-white/[0.08]">
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
+              <th className="pb-3 pl-1 text-left text-xs font-medium uppercase tracking-wider text-deribit-gray">
                 Tenor
               </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                ATM IV
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                IV Chg
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                25&Delta; RR
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                Skew Chg
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                Fly Chg
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                25&Delta; BF
-              </th>
-              <th className="pb-3 text-xs font-medium uppercase tracking-wider text-deribit-gray">
-                Norm RR
-              </th>
+              <th className={NUM_HEADER}>ATM IV</th>
+              <th className={NUM_HEADER}>IV Chg</th>
+              <th className={NUM_HEADER}>25&Delta; RR</th>
+              <th className={NUM_HEADER}>Skew Chg</th>
+              <th className={NUM_HEADER}>Fly</th>
+              <th className={NUM_HEADER}>Norm RR</th>
             </tr>
           </thead>
           <tbody>
@@ -155,21 +115,17 @@ export default function TenorTable({ tenors }: TenorTableProps) {
         <span>&middot;</span>
         <span>RR = Call IV &minus; Put IV</span>
         <span>&middot;</span>
-        <span>Norm = RR / ATM</span>
+        <span>Fly = (Call + Put)/2 &minus; ATM</span>
         <span>&middot;</span>
-        <span>BF = (Call + Put)/2 &minus; ATM</span>
+        <span>Norm RR = RR / ATM</span>
         <span>&middot;</span>
-        <span className="text-deribit-green">+Skew</span>
-        <span>= bullish shift</span>
+        <span className="whitespace-nowrap">
+          <span className="text-deribit-green">+Skew Chg</span> = bullish shift
+        </span>
         <span>&middot;</span>
-        <span className="text-deribit-red">&minus;Skew</span>
-        <span>= bearish shift</span>
-        <span>&middot;</span>
-        <span className="text-deribit-green">+Fly</span>
-        <span>= wings richening</span>
-        <span>&middot;</span>
-        <span className="text-deribit-red">&minus;Fly</span>
-        <span>= wings cheapening</span>
+        <span className="whitespace-nowrap">
+          <span className="text-deribit-red">&minus;Skew Chg</span> = bearish shift
+        </span>
       </div>
     </div>
   );

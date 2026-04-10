@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Asset, TenorLabel, TimeRange, TIME_RANGE_HOURS } from "@/types";
+import { Asset, TenorLabel } from "@/types";
 import { fetchBinanceCandles, fetchBinanceCandlesPaginated, getBinanceSymbol } from "@/lib/binance";
 import { computeCurrentRV, TENOR_DAYS } from "@/lib/rv";
 
@@ -30,7 +30,7 @@ function percentileRank(values: number[], target: number): number {
 export function useCompassData(
   asset: Asset,
   tenor: TenorLabel,
-  range: TimeRange,
+  lookbackHours: number,
   currentIV: number | null
 ): CompassData {
   const [data, setData] = useState<CompassData>({
@@ -55,10 +55,9 @@ export function useCompassData(
       }
 
       const tenorHours = tenorDays * 24;
-      const rangeHours = TIME_RANGE_HOURS[range];
-      // Use the selected range for IV percentile (matches Vol Stats behavior)
-      // Cap to what the backend has (max 720h = 30 days)
-      const ivLookbackHours = Math.min(rangeHours, 720);
+      // Use the caller-supplied lookback window for IV percentile (matches Vol
+      // Stats behavior). Backend now retains 180d, so no artificial cap.
+      const ivLookbackHours = lookbackHours;
 
       // For tenors > 30D, use daily candles for spot percentile (Binance caps hourly at 1000 = ~41 days)
       const useDaily = tenorDays > 30;
@@ -164,7 +163,7 @@ export function useCompassData(
     } catch {
       setData((prev) => ({ ...prev, loading: false }));
     }
-  }, [asset, tenor, range, currentIV]);
+  }, [asset, tenor, lookbackHours, currentIV]);
 
   useEffect(() => {
     compute();
