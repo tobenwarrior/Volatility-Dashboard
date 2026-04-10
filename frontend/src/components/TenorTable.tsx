@@ -40,7 +40,8 @@ const NUM_CELL = "py-3 text-center text-sm tabular-nums";
 
 // Tooltip on the 25Δ RR cell showing the raw 25Δ call/put IVs used to
 // compute RR and Fly. Pure CSS (group-hover), no dependencies. Positioned
-// below the cell with a high z-index so it overlays following rows.
+// ABOVE the cell to avoid clipping on the last row and to match the
+// existing VolCompass tooltip pattern (bg-black/90 + backdrop-blur).
 function RrCellWithTooltip({ tenor }: { tenor: TenorData }) {
   const hasBreakdown =
     tenor.call_25d_iv != null && tenor.put_25d_iv != null;
@@ -53,7 +54,7 @@ function RrCellWithTooltip({ tenor }: { tenor: TenorData }) {
       {hasBreakdown && (
         <div
           role="tooltip"
-          className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-deribit-darker px-3 py-2 text-left text-xs shadow-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/15 bg-black/90 px-3 py-2 text-left text-xs leading-relaxed opacity-0 shadow-xl backdrop-blur transition-opacity duration-150 group-hover:opacity-100"
         >
           <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-deribit-gray">
             25&Delta; IV Breakdown
