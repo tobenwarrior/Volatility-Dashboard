@@ -3,6 +3,11 @@ export interface TenorData {
   target_days: number;
   atm_iv: number | null;
   rr_25d: number | null;
+  // Raw 25Δ IVs used to compute RR and Fly. Exposed for the tooltip
+  // breakdown on the 25Δ RR cell. Null if the strike interpolation
+  // couldn't bracket 0.25 delta on one side.
+  put_25d_iv: number | null;
+  call_25d_iv: number | null;
   bf_25d: number | null;
   rv: number | null;
   dod_iv_change: number | null;

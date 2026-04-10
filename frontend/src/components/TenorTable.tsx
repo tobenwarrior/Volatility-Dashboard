@@ -38,6 +38,52 @@ function ChangeCell({ value, hours }: { value: number | null; hours: number | nu
 const NUM_HEADER = "pb-3 text-center text-xs font-medium uppercase tracking-wider text-deribit-gray";
 const NUM_CELL = "py-3 text-center text-sm tabular-nums";
 
+// Tooltip on the 25Δ RR cell showing the raw 25Δ call/put IVs used to
+// compute RR and Fly. Pure CSS (group-hover), no dependencies. Positioned
+// below the cell with a high z-index so it overlays following rows.
+function RrCellWithTooltip({ tenor }: { tenor: TenorData }) {
+  const hasBreakdown =
+    tenor.call_25d_iv != null && tenor.put_25d_iv != null;
+
+  return (
+    <div className="group relative inline-block">
+      <span className={hasBreakdown ? "cursor-help text-white" : "text-white"}>
+        {formatSigned(tenor.rr_25d)}
+      </span>
+      {hasBreakdown && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-deribit-darker px-3 py-2 text-left text-xs shadow-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        >
+          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-deribit-gray">
+            25&Delta; IV Breakdown
+          </div>
+          <div className="flex justify-between gap-6 tabular-nums">
+            <span className="text-white/60">Call IV</span>
+            <span className="text-white">{tenor.call_25d_iv!.toFixed(2)}%</span>
+          </div>
+          <div className="flex justify-between gap-6 tabular-nums">
+            <span className="text-white/60">Put IV</span>
+            <span className="text-white">{tenor.put_25d_iv!.toFixed(2)}%</span>
+          </div>
+          <div className="my-1.5 border-t border-white/10" />
+          <div className="flex justify-between gap-6 tabular-nums">
+            <span className="text-white/60">RR</span>
+            <span className="text-white">{formatSigned(tenor.rr_25d)}</span>
+          </div>
+          <div className="flex justify-between gap-6 tabular-nums">
+            <span className="text-white/60">Fly</span>
+            <span className="text-white">{formatSigned(tenor.bf_25d)}</span>
+          </div>
+          <div className="mt-1.5 text-[9px] text-white/40">
+            RR = Call &minus; Put &nbsp;&middot;&nbsp; Fly = (C+P)/2 &minus; ATM
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TenorRow({ tenor }: { tenor: TenorData }) {
   const normRr =
     tenor.rr_25d != null && tenor.atm_iv != null && tenor.atm_iv !== 0
@@ -55,8 +101,8 @@ function TenorRow({ tenor }: { tenor: TenorData }) {
       <td className={NUM_CELL}>
         <ChangeCell value={tenor.dod_iv_change} hours={tenor.change_hours} />
       </td>
-      <td className={`${NUM_CELL} text-white`}>
-        {formatSigned(tenor.rr_25d)}
+      <td className={NUM_CELL}>
+        <RrCellWithTooltip tenor={tenor} />
       </td>
       <td className={NUM_CELL}>
         <ChangeCell value={tenor.dod_rr_change} hours={tenor.change_hours} />
@@ -78,7 +124,10 @@ export default function TenorTable({ tenors }: TenorTableProps) {
 
   return (
     <div className="w-full">
-      <div className="overflow-x-auto">
+      {/* overflow must stay visible so the RR tooltip can escape the cell.
+          Safe because the table is w-full table-fixed with 7 fractional
+          cols — it cannot horizontally overflow on any reasonable screen. */}
+      <div>
         <table className="w-full table-fixed">
           {/* Narrower Tenor col gives the numerical columns more breathing room */}
           <colgroup>

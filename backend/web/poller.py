@@ -132,6 +132,12 @@ class Poller:
                         "target_days": tenor_cfg["days"],
                         "atm_iv": atm_iv,
                         "rr_25d": rr_info.get("rr_25d"),
+                        # Raw 25Δ IVs exposed for frontend tooltip. These are
+                        # NOT written to the DB — history.save_snapshot() only
+                        # reads atm_iv/rr_25d/rv/bf_25d by name, so adding
+                        # these keys is a pure pass-through for the API.
+                        "put_25d_iv": put_iv,
+                        "call_25d_iv": call_iv,
                         "bf_25d": bf_25d,
                         "rv": rv_results.get(label),
                         "dod_iv_change": dod.get("dod_iv_change"),
