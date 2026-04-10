@@ -1,8 +1,9 @@
 """
-25-delta risk reversal calculator.
+25-delta risk reversal and butterfly calculator.
 
-For each tenor, finds the 25-delta put IV and 25-delta call IV
-and computes RR = 25d_call_IV - 25d_put_IV.
+For each tenor, finds the 25-delta put IV and 25-delta call IV and returns
+both the raw IVs and RR = 25d_call_IV - 25d_put_IV. Callers combine with
+ATM IV to derive 25d butterfly = (25d_call + 25d_put) / 2 - ATM.
 
 Uses live greeks.delta from Deribit WebSocket ticker data (no API calls).
 """
@@ -22,7 +23,7 @@ class RiskReversalCalculator:
         self._ticker_store = ticker_store
 
     def calculate(self, spot, expiry_data, expiry_days, tenor_expiries, currency="BTC"):
-        """Compute 25d RR for each tenor.
+        """Compute 25d RR and raw 25d put/call IVs for each tenor.
 
         Args:
             spot: Current spot price.
@@ -32,7 +33,8 @@ class RiskReversalCalculator:
             currency: "BTC" or "ETH".
 
         Returns:
-            Dict mapping tenor_label to rr_25d float (or None).
+            Dict mapping tenor_label to
+            {"rr_25d": float|None, "put_25d_iv": float|None, "call_25d_iv": float|None}.
         """
         # Collect all unique expiries we need to process
         expiries_needed = set()
@@ -42,51 +44,79 @@ class RiskReversalCalculator:
             if nxt:
                 expiries_needed.add(nxt)
 
-        # Compute RR per expiry (cache to avoid duplicate work)
-        expiry_rr_cache = {}
+        # Compute raw 25d put/call IVs per expiry (cache to avoid duplicate work)
+        # Each cache entry: (put_25d_iv, call_25d_iv) or (None, None) if unavailable.
+        expiry_cache = {}
         for expiry in expiries_needed:
             if expiry not in expiry_data or expiry not in expiry_days:
                 continue
-            rr = self._rr_at_expiry(
-                spot, expiry, expiry_data[expiry], expiry_days[expiry], currency
+            expiry_cache[expiry] = self._ivs_at_expiry(
+                spot, expiry, expiry_data[expiry], currency
             )
-            expiry_rr_cache[expiry] = rr
 
-        # Interpolate across bracketing expiries per tenor
+        # Interpolate put/call IVs linearly across bracketing expiries per tenor.
+        # RR is linear in (call - put) so interpolating raw IVs and subtracting
+        # gives the same answer as interpolating RR directly.
         results = {}
         for label, (near, nxt) in tenor_expiries.items():
-            near_rr = expiry_rr_cache.get(near) if near else None
-            nxt_rr = expiry_rr_cache.get(nxt) if nxt else None
+            near_pair = expiry_cache.get(near) if near else None
+            nxt_pair = expiry_cache.get(nxt) if nxt else None
 
-            if near_rr is not None and nxt_rr is not None:
-                t1 = expiry_days[near]
-                t2 = expiry_days[nxt]
-                target = self._label_to_days(label)
-                if target and t2 != t1:
-                    w = (target - t1) / (t2 - t1)
-                    results[label] = near_rr + w * (nxt_rr - near_rr)
-                else:
-                    results[label] = near_rr
-            elif near_rr is not None:
-                results[label] = near_rr
-            elif nxt_rr is not None:
-                results[label] = nxt_rr
-            else:
-                results[label] = None
+            put_iv, call_iv = self._interp_pair(
+                near_pair, nxt_pair,
+                expiry_days.get(near) if near else None,
+                expiry_days.get(nxt) if nxt else None,
+                self._label_to_days(label),
+            )
+
+            rr = call_iv - put_iv if (put_iv is not None and call_iv is not None) else None
+            results[label] = {
+                "rr_25d": rr,
+                "put_25d_iv": put_iv,
+                "call_25d_iv": call_iv,
+            }
 
         return results
 
-    def _rr_at_expiry(self, spot, expiry, strikes_data, days, currency="BTC"):
-        """Compute the 25d risk reversal using live greeks.delta from WebSocket.
+    @staticmethod
+    def _interp_pair(near_pair, nxt_pair, t1, t2, target):
+        """Linearly interpolate a (put_iv, call_iv) pair between two expiries.
+
+        Falls back to whichever side has data if the other is missing.
+        """
+        def _interp(a, b):
+            if a is None or b is None:
+                return a if a is not None else b
+            if target is None or t1 is None or t2 is None or t2 == t1:
+                return a
+            w = (target - t1) / (t2 - t1)
+            return a + w * (b - a)
+
+        near_put, near_call = near_pair if near_pair else (None, None)
+        nxt_put, nxt_call = nxt_pair if nxt_pair else (None, None)
+
+        # If one side entirely missing, use the other side verbatim
+        if near_pair is None and nxt_pair is None:
+            return None, None
+        if near_pair is None:
+            return nxt_put, nxt_call
+        if nxt_pair is None:
+            return near_put, near_call
+
+        return _interp(near_put, nxt_put), _interp(near_call, nxt_call)
+
+    def _ivs_at_expiry(self, spot, expiry, strikes_data, currency="BTC"):
+        """Extract 25d put and call IVs for a single expiry using live greeks.
 
         Reads delta and mark_iv from the TickerDataStore, which is continuously
         updated by the WebSocket client. No API calls.
 
         Returns:
-            RR as float (25d_call_IV - 25d_put_IV), or None.
+            (put_25d_iv, call_25d_iv) tuple — either element may be None if a
+            side cannot be bracketed to the target delta.
         """
         if self._ticker_store is None:
-            return None
+            return (None, None)
 
         put_results = []
         call_results = []
@@ -105,11 +135,7 @@ class RiskReversalCalculator:
 
         put_25d_iv = self._try_bracket(put_results)
         call_25d_iv = self._try_bracket(call_results)
-
-        if put_25d_iv is None or call_25d_iv is None:
-            return None
-
-        return call_25d_iv - put_25d_iv
+        return (put_25d_iv, call_25d_iv)
 
     def _try_bracket(self, results):
         """Try to interpolate to target delta from collected results.

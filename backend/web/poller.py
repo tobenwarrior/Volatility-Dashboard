@@ -83,7 +83,8 @@ class Poller:
                         multi["expiry_data"], multi["expiry_days"],
                     )
 
-                # 2. Compute 25d RR for all tenors
+                # 2. Compute 25d RR + raw 25d put/call IVs for all tenors.
+                # Returns {label: {"rr_25d", "put_25d_iv", "call_25d_iv"}}.
                 rr_results = self._rr_calculator.calculate(
                     spot,
                     multi["expiry_data"],
@@ -110,16 +111,32 @@ class Poller:
                 for tenor_cfg in self._tenors:
                     label = tenor_cfg["label"]
                     iv_info = multi["tenor_results"].get(label, {})
-                    rr = rr_results.get(label)
+                    rr_info = rr_results.get(label) or {}
                     dod = dod_changes.get(label, {})
+
+                    atm_iv = iv_info.get("atm_iv")
+                    put_iv = rr_info.get("put_25d_iv")
+                    call_iv = rr_info.get("call_25d_iv")
+
+                    # 25d butterfly = (25d_call + 25d_put) / 2 - ATM
+                    # Market convention (Bloomberg/Deribit): measures smile
+                    # convexity (kurtosis proxy). Positive = wings expensive
+                    # relative to ATM.
+                    if atm_iv is not None and put_iv is not None and call_iv is not None:
+                        bf_25d = (call_iv + put_iv) / 2 - atm_iv
+                    else:
+                        bf_25d = None
+
                     tenor_list.append({
                         "label": label,
                         "target_days": tenor_cfg["days"],
-                        "atm_iv": iv_info.get("atm_iv"),
-                        "rr_25d": rr,
+                        "atm_iv": atm_iv,
+                        "rr_25d": rr_info.get("rr_25d"),
+                        "bf_25d": bf_25d,
                         "rv": rv_results.get(label),
                         "dod_iv_change": dod.get("dod_iv_change"),
                         "dod_rr_change": dod.get("dod_rr_change"),
+                        "dod_bf_change": dod.get("dod_bf_change"),
                         "change_hours": dod.get("change_hours"),
                         "method": iv_info.get("method"),
                         "error": iv_info.get("error"),

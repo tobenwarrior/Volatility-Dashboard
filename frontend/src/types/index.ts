@@ -3,9 +3,11 @@ export interface TenorData {
   target_days: number;
   atm_iv: number | null;
   rr_25d: number | null;
+  bf_25d: number | null;
   rv: number | null;
   dod_iv_change: number | null;
   dod_rr_change: number | null;
+  dod_bf_change: number | null;
   change_hours: number | null;
   method: string | null;
   error: string | null;
@@ -38,6 +40,7 @@ export interface HistoryPoint {
   atm_iv: number | null;
   rr_25d: number | null;
   rv: number | null;
+  bf_25d: number | null;
 }
 
 export type Asset = "BTC" | "ETH";

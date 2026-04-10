@@ -36,7 +36,7 @@ class HistoryStore:
         self._write_counter = 0
         self._pending_rows = []
 
-        # In-memory cache: (currency, tenor) -> [(datetime, atm_iv, rr_25d, rv), ...]
+        # In-memory cache: (currency, tenor) -> [(datetime, atm_iv, rr_25d, rv, bf_25d), ...]
         self._cache = {}
         self._cache_lock = threading.Lock()
         self._backfill_cache()
@@ -73,6 +73,9 @@ class HistoryStore:
                 cur.execute("""
                     ALTER TABLE iv_snapshots ADD COLUMN IF NOT EXISTS rv DOUBLE PRECISION
                 """)
+                cur.execute("""
+                    ALTER TABLE iv_snapshots ADD COLUMN IF NOT EXISTS bf_25d DOUBLE PRECISION
+                """)
 
     # ------------------------------------------------------------------
     # Cache management
@@ -85,15 +88,15 @@ class HistoryStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT timestamp, tenor, atm_iv, rr_25d, currency, rv "
+                    "SELECT timestamp, tenor, atm_iv, rr_25d, currency, rv, bf_25d "
                     "FROM iv_snapshots WHERE timestamp >= %s ORDER BY timestamp ASC",
                     (cutoff,),
                 )
-                for ts, tenor, atm_iv, rr_25d, currency, rv in cur.fetchall():
+                for ts, tenor, atm_iv, rr_25d, currency, rv, bf_25d in cur.fetchall():
                     key = (currency, tenor)
                     if key not in self._cache:
                         self._cache[key] = []
-                    self._cache[key].append((ts, atm_iv, rr_25d, rv))
+                    self._cache[key].append((ts, atm_iv, rr_25d, rv, bf_25d))
 
         total = sum(len(v) for v in self._cache.values())
         logger.info("Backfilled %d snapshots into memory cache", total)
@@ -123,10 +126,10 @@ class HistoryStore:
                 if key not in self._cache:
                     self._cache[key] = []
                 self._cache[key].append(
-                    (ts, t.get("atm_iv"), t.get("rr_25d"), t.get("rv"))
+                    (ts, t.get("atm_iv"), t.get("rr_25d"), t.get("rv"), t.get("bf_25d"))
                 )
                 db_rows.append(
-                    (ts, t["label"], t.get("atm_iv"), t.get("rr_25d"), currency, t.get("rv"))
+                    (ts, t["label"], t.get("atm_iv"), t.get("rr_25d"), currency, t.get("rv"), t.get("bf_25d"))
                 )
 
         self._pending_rows.extend(db_rows)
@@ -151,8 +154,8 @@ class HistoryStore:
             with self._connect() as conn:
                 with conn.cursor() as cur:
                     cur.executemany(
-                        "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d, currency, rv) "
-                        "VALUES (%s, %s, %s, %s, %s, %s)",
+                        "INSERT INTO iv_snapshots (timestamp, tenor, atm_iv, rr_25d, currency, rv, bf_25d) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                         rows,
                     )
             logger.info("Flushed %d rows to database", len(rows))
@@ -170,7 +173,12 @@ class HistoryStore:
         target = now - timedelta(hours=24)
         window_start = now - timedelta(hours=30)
         window_end = now - timedelta(hours=18)
-        empty = {"dod_iv_change": None, "dod_rr_change": None, "change_hours": None}
+        empty = {
+            "dod_iv_change": None,
+            "dod_rr_change": None,
+            "dod_bf_change": None,
+            "change_hours": None,
+        }
         results = {}
 
         # Snapshot the relevant cache entries under lock
@@ -189,37 +197,37 @@ class HistoryStore:
             # Find snapshot closest to 24h ago within 18-30h window
             best = None
             best_dist = float("inf")
-            for ts, atm_iv, rr_25d, rv in snapshots:
+            for ts, atm_iv, rr_25d, rv, bf_25d in snapshots:
                 if atm_iv is None or rr_25d is None:
                     continue
                 if window_start <= ts <= window_end:
                     dist = abs((ts - target).total_seconds())
                     if dist < best_dist:
-                        best = (ts, atm_iv, rr_25d)
+                        best = (ts, atm_iv, rr_25d, bf_25d)
                         best_dist = dist
 
             # Fallback: oldest snapshot from the last 24h
             if best is None:
-                for ts, atm_iv, rr_25d, rv in snapshots:
+                for ts, atm_iv, rr_25d, rv, bf_25d in snapshots:
                     if ts >= target and atm_iv is not None and rr_25d is not None:
-                        best = (ts, atm_iv, rr_25d)
+                        best = (ts, atm_iv, rr_25d, bf_25d)
                         break
 
             if best is None:
                 results[tenor] = dict(empty)
                 continue
 
-            old_ts, old_iv, old_rr = best
+            old_ts, old_iv, old_rr, old_bf = best
             age_hours = (now - old_ts).total_seconds() / 3600
             if age_hours < 1 / 60:
                 results[tenor] = dict(empty)
                 continue
 
             # Most recent snapshot with data
-            latest_iv = latest_rr = None
-            for ts, atm_iv, rr_25d, rv in reversed(snapshots):
+            latest_iv = latest_rr = latest_bf = None
+            for ts, atm_iv, rr_25d, rv, bf_25d in reversed(snapshots):
                 if atm_iv is not None:
-                    latest_iv, latest_rr = atm_iv, rr_25d
+                    latest_iv, latest_rr, latest_bf = atm_iv, rr_25d, bf_25d
                     break
 
             if latest_iv is None:
@@ -228,9 +236,11 @@ class HistoryStore:
 
             dod_iv = (latest_iv - old_iv) if old_iv is not None else None
             dod_rr = (latest_rr - old_rr) if latest_rr is not None and old_rr is not None else None
+            dod_bf = (latest_bf - old_bf) if latest_bf is not None and old_bf is not None else None
             results[tenor] = {
                 "dod_iv_change": dod_iv,
                 "dod_rr_change": dod_rr,
+                "dod_bf_change": dod_bf,
                 "change_hours": round(age_hours, 1),
             }
 
@@ -244,7 +254,7 @@ class HistoryStore:
         with self._cache_lock:
             snapshots = list(self._cache.get(key, []))
 
-        rows = [(ts, iv, rr, rv) for ts, iv, rr, rv in snapshots if ts >= cutoff]
+        rows = [(ts, iv, rr, rv, bf) for ts, iv, rr, rv, bf in snapshots if ts >= cutoff]
         if not rows:
             return []
 
@@ -261,8 +271,9 @@ class HistoryStore:
                 "atm_iv": round(atm_iv, 4) if atm_iv is not None else None,
                 "rr_25d": round(rr_25d, 4) if rr_25d is not None else None,
                 "rv": round(rv, 4) if rv is not None else None,
+                "bf_25d": round(bf_25d, 4) if bf_25d is not None else None,
             }
-            for ts, atm_iv, rr_25d, rv in rows
+            for ts, atm_iv, rr_25d, rv, bf_25d in rows
         ]
 
     def get_vol_stats(self, hours=None, currency="BTC"):
@@ -287,10 +298,10 @@ class HistoryStore:
         for tenor in tenors:
             snapshots = tenor_snapshots[tenor]
             if cutoff:
-                filtered = [(ts, iv) for ts, iv, rr, rv in snapshots
+                filtered = [(ts, iv) for ts, iv, rr, rv, bf in snapshots
                             if iv is not None and ts >= cutoff]
             else:
-                filtered = [(ts, iv) for ts, iv, rr, rv in snapshots
+                filtered = [(ts, iv) for ts, iv, rr, rv, bf in snapshots
                             if iv is not None]
 
             if not filtered:
