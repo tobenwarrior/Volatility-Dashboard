@@ -1,10 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
-import { TenorData } from "@/types";
+import { TenorData, TimeRange } from "@/types";
 
 interface TermStructureChartProps {
   tenors: TenorData[] | undefined;
+  changeRange?: TimeRange;
 }
 
 const PLOT = { top: 30, right: 50, bottom: 40, left: 50 };
@@ -74,7 +75,7 @@ function symScale(values: number[], tickCount: number) {
   return niceScale(-padded, padded, tickCount);
 }
 
-export default function TermStructureChart({ tenors }: TermStructureChartProps) {
+export default function TermStructureChart({ tenors, changeRange = "24H" }: TermStructureChartProps) {
   // Hover tracks tenor label (stable across re-renders), not index
   const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
   const clipId = useId();
@@ -89,7 +90,7 @@ export default function TermStructureChart({ tenors }: TermStructureChartProps) 
   }
 
   const ivs = valid.map((t) => t.atm_iv!);
-  const changes = valid.map((t) => t.dod_iv_change);
+  const changes = valid.map((t) => t.iv_change ?? t.dod_iv_change);
   const hasChanges = changes.some((c) => c != null);
   const changeVals = changes.filter((c): c is number => c != null);
 
@@ -190,7 +191,7 @@ export default function TermStructureChart({ tenors }: TermStructureChartProps) 
           {/* IV Change bars with hover */}
           {hasChanges &&
             valid.map((t, i) => {
-              const c = t.dod_iv_change;
+              const c = t.iv_change ?? t.dod_iv_change;
               if (c == null) return null;
               const barTop = c >= 0 ? yChg(c) : zeroY;
               const barH = Math.abs(yChg(c) - zeroY);
@@ -244,8 +245,8 @@ export default function TermStructureChart({ tenors }: TermStructureChartProps) 
         </g>
 
         {/* Hover tooltip for IV change — OUTSIDE clipPath so it's never cut off */}
-        {hovered !== null && valid[hovered]?.dod_iv_change != null && (() => {
-          const c = valid[hovered].dod_iv_change!;
+        {hovered !== null && (valid[hovered]?.iv_change ?? valid[hovered]?.dod_iv_change) != null && (() => {
+          const c = (valid[hovered].iv_change ?? valid[hovered].dod_iv_change)!;
           const label = valid[hovered].label;
           const tx = xPos(hovered);
           // Position tooltip above bar if positive, below if negative
@@ -360,7 +361,7 @@ export default function TermStructureChart({ tenors }: TermStructureChartProps) 
             fontSize={9}
             transform={`rotate(90, ${SVG_W - 8}, ${PLOT.top + PLOT_H / 2})`}
           >
-            24h Chg (%)
+            {changeRange} Chg (%)
           </text>
         )}
       </svg>

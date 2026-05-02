@@ -38,7 +38,29 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
         currency = _get_currency()
         if currency is None:
             return jsonify({"error": "Invalid currency"}), 400
-        return jsonify(pollers[currency].get_latest_tenor_data())
+        try:
+            hours = float(request.args.get("hours", "24"))
+        except (ValueError, TypeError):
+            hours = 24.0
+        try:
+            from config import HISTORY_KEEP_DAYS
+            max_hours = HISTORY_KEEP_DAYS * 24.0
+        except Exception:
+            max_hours = 4320.0
+        hours = max(0.01, min(hours, max_hours))
+
+        # Copy before overlaying range changes so the poller's latest snapshot
+        # remains a pure live-data cache. Range selection is a read concern.
+        data = pollers[currency].get_latest_tenor_data()
+        result = dict(data)
+        tenors_payload = [dict(t) for t in data.get("tenors", [])]
+        changes = history_store.get_range_changes(hours, currency, latest_tenors=tenors_payload)
+        for tenor in tenors_payload:
+            change = changes.get(tenor.get("label"), {})
+            tenor.update(change)
+        result["tenors"] = tenors_payload
+        result["change_hours_requested"] = hours
+        return jsonify(result)
 
     @app.route("/api/history")
     def history():

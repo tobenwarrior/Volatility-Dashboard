@@ -198,21 +198,41 @@ class HistoryStore:
     # Reads — all from in-memory cache, zero DB egress
     # ------------------------------------------------------------------
 
-    def get_dod_changes(self, currency="BTC"):
-        """Day-over-day changes from in-memory cache."""
-        now = datetime.now(timezone.utc)
-        target = now - timedelta(hours=24)
-        window_start = now - timedelta(hours=30)
-        window_end = now - timedelta(hours=18)
-        empty = {
+    def _empty_change(self):
+        return {
+            "iv_change": None,
+            "rr_change": None,
+            "bf_change": None,
             "dod_iv_change": None,
             "dod_rr_change": None,
             "dod_bf_change": None,
             "change_hours": None,
         }
-        results = {}
 
-        # Snapshot the relevant cache entries under lock
+    def get_range_changes(self, hours=24.0, currency="BTC", latest_tenors=None):
+        """Range-based IV/RR/Fly changes from the in-memory cache.
+
+        This powers selectable top-panel ranges without adding frontend
+        per-tenor history fetches or DB reads.  ``latest_tenors`` may be the
+        live poller snapshot from /api/tenors, letting the displayed change use
+        the freshest live values as the current side of the diff while the old
+        side still comes from persisted history.
+        """
+        try:
+            hours = float(hours)
+        except (TypeError, ValueError):
+            hours = 24.0
+        hours = max(hours, 0.01)
+
+        now_fn = getattr(self, "_now", None)
+        now = now_fn() if now_fn else datetime.now(timezone.utc)
+        target = now - timedelta(hours=hours)
+        empty = self._empty_change()
+
+        live_by_tenor = {}
+        if latest_tenors:
+            live_by_tenor = {t.get("label"): t for t in latest_tenors if t.get("label")}
+
         with self._cache_lock:
             tenor_snapshots = {
                 tenor: list(self._cache[(cur, tenor)])
@@ -220,62 +240,64 @@ class HistoryStore:
                 if cur == currency
             }
 
+        results = {}
         for tenor, snapshots in tenor_snapshots.items():
-            if not snapshots:
+            valid = [s for s in snapshots if s[1] is not None]
+            if not valid:
                 results[tenor] = dict(empty)
                 continue
 
-            # Find snapshot closest to 24h ago within 18-30h window
-            best = None
-            best_dist = float("inf")
-            for ts, atm_iv, rr_25d, rv, bf_25d in snapshots:
-                if atm_iv is None or rr_25d is None:
-                    continue
-                if window_start <= ts <= window_end:
-                    dist = abs((ts - target).total_seconds())
-                    if dist < best_dist:
-                        best = (ts, atm_iv, rr_25d, bf_25d)
-                        best_dist = dist
-
-            # Fallback: oldest snapshot from the last 24h
-            if best is None:
-                for ts, atm_iv, rr_25d, rv, bf_25d in snapshots:
-                    if ts >= target and atm_iv is not None and rr_25d is not None:
-                        best = (ts, atm_iv, rr_25d, bf_25d)
-                        break
-
-            if best is None:
-                results[tenor] = dict(empty)
-                continue
-
-            old_ts, old_iv, old_rr, old_bf = best
-            age_hours = (now - old_ts).total_seconds() / 3600
-            if age_hours < 1 / 60:
-                results[tenor] = dict(empty)
-                continue
-
-            # Most recent snapshot with data
-            latest_iv = latest_rr = latest_bf = None
-            for ts, atm_iv, rr_25d, rv, bf_25d in reversed(snapshots):
-                if atm_iv is not None:
-                    latest_iv, latest_rr, latest_bf = atm_iv, rr_25d, bf_25d
-                    break
+            live = live_by_tenor.get(tenor)
+            if live:
+                latest_ts = now
+                latest_iv = live.get("atm_iv")
+                latest_rr = live.get("rr_25d")
+                latest_bf = live.get("bf_25d")
+            else:
+                latest_ts, latest_iv, latest_rr, _rv, latest_bf = valid[-1]
 
             if latest_iv is None:
                 results[tenor] = dict(empty)
                 continue
 
-            dod_iv = (latest_iv - old_iv) if old_iv is not None else None
-            dod_rr = (latest_rr - old_rr) if latest_rr is not None and old_rr is not None else None
-            dod_bf = (latest_bf - old_bf) if latest_bf is not None and old_bf is not None else None
+            old_candidates = [s for s in valid if s[0] < latest_ts]
+            if not old_candidates:
+                results[tenor] = dict(empty)
+                continue
+
+            # Pick the snapshot closest to the requested target.  Ties prefer
+            # the older point so a 4h request with 1h/7h samples resolves to 7h
+            # rather than reusing a too-recent value.
+            old_ts, old_iv, old_rr, _old_rv, old_bf = min(
+                old_candidates,
+                key=lambda s: (abs((s[0] - target).total_seconds()), -((now - s[0]).total_seconds())),
+            )
+
+            age_hours = (now - old_ts).total_seconds() / 3600
+            if age_hours < 1 / 60:
+                results[tenor] = dict(empty)
+                continue
+
+            iv_change = latest_iv - old_iv if old_iv is not None else None
+            rr_change = latest_rr - old_rr if latest_rr is not None and old_rr is not None else None
+            bf_change = latest_bf - old_bf if latest_bf is not None and old_bf is not None else None
+
             results[tenor] = {
-                "dod_iv_change": dod_iv,
-                "dod_rr_change": dod_rr,
-                "dod_bf_change": dod_bf,
+                "iv_change": iv_change,
+                "rr_change": rr_change,
+                "bf_change": bf_change,
+                # Backwards-compatible names consumed by current frontend.
+                "dod_iv_change": iv_change,
+                "dod_rr_change": rr_change,
+                "dod_bf_change": bf_change,
                 "change_hours": round(age_hours, 1),
             }
 
         return results
+
+    def get_dod_changes(self, currency="BTC"):
+        """Day-over-day changes from in-memory cache."""
+        return self.get_range_changes(24.0, currency)
 
     def get_history(self, tenor, hours, currency="BTC", max_points=350):
         """Time-series data from in-memory cache."""

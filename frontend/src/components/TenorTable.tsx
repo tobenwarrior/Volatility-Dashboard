@@ -100,13 +100,13 @@ function TenorRow({ tenor }: { tenor: TenorData }) {
         {tenor.atm_iv != null ? `${tenor.atm_iv.toFixed(2)}%` : "\u2014"}
       </td>
       <td className={NUM_CELL}>
-        <ChangeCell value={tenor.dod_iv_change} hours={tenor.change_hours} />
+        <ChangeCell value={tenor.iv_change ?? tenor.dod_iv_change} hours={tenor.change_hours} />
       </td>
       <td className={NUM_CELL}>
         <RrCellWithTooltip tenor={tenor} />
       </td>
       <td className={NUM_CELL}>
-        <ChangeCell value={tenor.dod_rr_change} hours={tenor.change_hours} />
+        <ChangeCell value={tenor.rr_change ?? tenor.dod_rr_change} hours={tenor.change_hours} />
       </td>
       <td className={`${NUM_CELL} text-white`}>
         {formatSigned(tenor.bf_25d)}

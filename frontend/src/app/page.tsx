@@ -11,7 +11,7 @@ import TimeRangeSelector from "@/components/TimeRangeSelector";
 import LayoutMenu, { type Section } from "@/components/LayoutMenu";
 import { useRVSeries } from "@/hooks/useRVSeries";
 import { useCompassData } from "@/hooks/useCompassData";
-import { TIME_RANGE_HOURS, type TenorLabel } from "@/types";
+import { TIME_RANGE_HOURS, type TenorLabel, type TimeRange } from "@/types";
 
 const VolCompass = dynamic(() => import("@/components/VolCompass"), { ssr: false });
 const IvChart = dynamic(() => import("@/components/IvChart"), { ssr: false });
@@ -42,8 +42,9 @@ const COMPASS_RANGE_HOURS: Record<TenorLabel, number> = {
 };
 
 export default function Home() {
-  const btc = useAssetData("BTC");
-  const eth = useAssetData("ETH");
+  const [topChangeRange, setTopChangeRange] = useState<TimeRange>("24H");
+  const btc = useAssetData("BTC", topChangeRange);
+  const eth = useAssetData("ETH", topChangeRange);
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [showIV, setShowIV] = useState<Record<string, boolean>>({ BTC: true, ETH: true });
   const [showRV, setShowRV] = useState<Record<string, boolean>>({ BTC: false, ETH: false });
@@ -55,7 +56,7 @@ export default function Home() {
   const ethRV = useRVSeries(eth.selectedTenor, "ETH", ethRVEnabled, TIME_RANGE_HOURS[eth.selectedRange]);
   const rvData: Record<string, typeof btcRV> = { BTC: btcRV, ETH: ethRV };
 
-  // Compass state — independent tenor and lookback range
+  // Compass state — independent tenor and range
   const [compassTenor, setCompassTenor] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
   const [compassRange, setCompassRange] = useState<Record<string, TenorLabel>>({ BTC: "30D", ETH: "30D" });
   const btcCT = compassTenor["BTC"] ?? "30D";
@@ -88,9 +89,14 @@ export default function Home() {
             key={`tenor-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
           >
-            <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-deribit-gray">
-              Implied Volatility Term Structure
-            </h3>
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
+                Implied Volatility Term Structure
+              </h3>
+              <div className="ml-auto">
+                <TimeRangeSelector selected={topChangeRange} onChange={setTopChangeRange} />
+              </div>
+            </div>
             <TenorTable tenors={d.data?.tenors} />
           </div>
         ));
@@ -101,10 +107,15 @@ export default function Home() {
             key={`chart-${asset}`}
             className="rounded-xl border border-white/[0.08] bg-surface-raised p-5"
           >
-            <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-deribit-gray">
-              ATM IV vs 24h IV Change
-            </h3>
-            <TermStructureChart tenors={d.data?.tenors} />
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-deribit-gray">
+                ATM IV vs {topChangeRange} IV Change
+              </h3>
+              <div className="ml-auto">
+                <TimeRangeSelector selected={topChangeRange} onChange={setTopChangeRange} />
+              </div>
+            </div>
+            <TermStructureChart tenors={d.data?.tenors} changeRange={topChangeRange} />
           </div>
         ));
 
@@ -232,7 +243,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Lookback</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-white/30">Range</span>
                 <div className="flex items-center gap-1.5">
                   {(["1W", "2W", "30D", "60D", "90D", "180D"] as TenorLabel[]).map((r) => (
                     <button

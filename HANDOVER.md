@@ -195,7 +195,7 @@ Each Poller runs an infinite loop with `POLL_INTERVAL=60s`. Per cycle (per asset
 
 | Route | Query params | Returns |
 |---|---|---|
-| `GET /api/tenors` | `currency=BTC\|ETH` | Latest snapshot — full per-tenor block from poller's in-memory cache |
+| `GET /api/tenors` | `currency=BTC\|ETH`, `hours` (default 24) | Latest snapshot plus selected-range IV/RR/Fly changes overlaid from in-memory history |
 | `GET /api/history` | `currency`, `tenor`, `hours` (default 48, max 744) | Time-series array of `{time, atm_iv, rr_25d, rv, bf_25d}` |
 | `GET /api/rv-series` | `currency`, `tenor` | Rolling hourly RV from Binance candles (broken on prod) |
 | `GET /api/vol-stats` | `currency`, `hours` (0 = all) | IV high/low/percentile/zscore per tenor |
@@ -244,7 +244,7 @@ All hooks live in `src/hooks/`. They poll the backend on independent intervals:
 
 | Hook | Endpoint | Interval | Notes |
 |---|---|---|---|
-| `useTenors(asset)` | `/api/tenors` | 60s | Drives TenorTable + TermStructureChart |
+| `useTenors(asset, range)` | `/api/tenors?hours=...` | 60s | Drives TenorTable + TermStructureChart range-change fields |
 | `usePrice(asset)` | `/api/price` | 5s | Spot price ticker, has green/red flash on change |
 | `useHistory(tenor, range, asset)` | `/api/history` | On selector change | Time-series for IvChart |
 | `useRVSeries(asset, tenor)` | `/api/rv-series` | On selector change | Realized vol overlay |
@@ -271,7 +271,7 @@ Markers: current (yellow), last week (blue), last month (gray). Tooltip on hover
 Time-series line chart using `lightweight-charts`. Toggles between ATM IV, 25Δ RR, RV, and Fly. Resampled to ≤350 points by the backend regardless of lookback window.
 
 #### `TermStructureChart.tsx`
-Bar+line combo: ATM IV curve across tenors as a line, 24h IV change as bars (green up / red down).
+Bar+line combo: ATM IV curve across tenors as a line, selected range IV change as bars (green up / red down). The range selector reuses the existing `/api/tenors` request with an `hours` query parameter; do not add per-tenor `/api/history` calls for this panel.
 
 ### 5.4 Types (`src/types/index.ts`)
 

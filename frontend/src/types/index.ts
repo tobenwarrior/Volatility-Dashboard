@@ -10,6 +10,9 @@ export interface TenorData {
   call_25d_iv: number | null;
   bf_25d: number | null;
   rv: number | null;
+  iv_change: number | null;
+  rr_change: number | null;
+  bf_change: number | null;
   dod_iv_change: number | null;
   dod_rr_change: number | null;
   dod_bf_change: number | null;
@@ -32,6 +35,7 @@ export interface VolStatsEntry {
 export interface TenorResponse {
   timestamp: string;
   spot_price: number;
+  change_hours_requested?: number;
   tenors: TenorData[];
   errors: string[];
 }
