@@ -1,11 +1,11 @@
 """
 Realized Volatility (RV) calculator.
 
-Uses Binance 1-hour perpetual futures candles for high-granularity RV
+Uses Binance 1-hour spot candles for high-granularity RV
 that updates every hour and closely tracks implied volatility.
 
-RV = std(log_returns[-N:]) * sqrt(8760) * 100
-where N = tenor_days * 24 (hourly returns)
+RV = sqrt(mean(log_return^2)) * sqrt(8760) * 100
+where N = tenor_days * 24 completed hourly returns
 """
 
 import logging
@@ -17,11 +17,11 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-BINANCE_KLINE_URL = "https://fapi.binance.com/fapi/v1/klines"
+BINANCE_KLINE_URL = "https://api.binance.com/api/v3/klines"
 PERIODS_PER_YEAR = 8760  # hours in a year
 _CACHE_TTL = 300  # 5 minutes
 
-# Map Deribit currency to Binance futures symbol
+# Map Deribit currency to Binance spot symbol
 BINANCE_SYMBOLS = {
     "BTC": "BTCUSDT",
     "ETH": "ETHUSDT",
@@ -29,16 +29,42 @@ BINANCE_SYMBOLS = {
 
 
 def _fetch_binance_1h(symbol, limit=1500):
-    """Fetch up to `limit` 1-hour candles from Binance futures."""
-    resp = requests.get(
-        BINANCE_KLINE_URL,
-        params={"symbol": symbol, "interval": "1h", "limit": limit},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    # Each candle: [open_time, open, high, low, close, volume, ...]
-    raw = resp.json()
-    return [{"time_ms": c[0], "close": float(c[4])} for c in raw]
+    """Fetch up to `limit` completed 1-hour candles from Binance spot."""
+    now_ms = int(_time.time() * 1000)
+    remaining = max(0, int(limit))
+    end_time = now_ms
+    candles = []
+
+    while remaining > 0:
+        batch_limit = min(remaining, 1000)
+        params = {"symbol": symbol, "interval": "1h", "limit": batch_limit, "endTime": end_time}
+        resp = requests.get(
+            BINANCE_KLINE_URL,
+            params=params,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        # Each candle: [open_time, open, high, low, close, volume, close_time, ...]
+        raw = resp.json()
+        if not raw:
+            break
+
+        batch = []
+        for c in raw:
+            close_time = int(c[6]) if len(c) > 6 else int(c[0]) + 3600_000 - 1
+            if close_time > now_ms:
+                continue
+            batch.append({"time_ms": int(c[0]), "close": float(c[4])})
+
+        if not batch:
+            break
+        candles[0:0] = batch
+        remaining -= len(batch)
+        end_time = batch[0]["time_ms"] - 1
+        if len(raw) < batch_limit:
+            break
+
+    return candles[-limit:]
 
 
 class RealizedVolCalculator:
@@ -49,22 +75,22 @@ class RealizedVolCalculator:
         self._cache = {}  # currency -> (timestamp, candles)
         self._rolling_cache = {}  # (currency, tenor_days) -> (timestamp, series)
 
-    def _get_candles(self, currency):
-        """Get 1h candles with caching."""
+    def _get_candles(self, currency, limit=1500):
+        """Get completed 1h candles with caching."""
         now = _time.time()
         if currency in self._cache:
             cached_time, cached = self._cache[currency]
-            if now - cached_time < _CACHE_TTL:
-                return cached
+            if now - cached_time < _CACHE_TTL and len(cached) >= limit:
+                return cached[-limit:]
 
         symbol = BINANCE_SYMBOLS.get(currency)
         if not symbol:
             return []
 
         try:
-            candles = _fetch_binance_1h(symbol, limit=1500)
+            candles = _fetch_binance_1h(symbol, limit=limit)
         except Exception:
-            logger.exception("Failed to fetch Binance 1h candles for %s", symbol)
+            logger.exception("Failed to fetch Binance 1h spot candles for %s", symbol)
             return []
 
         self._cache[currency] = (now, candles)
@@ -82,10 +108,10 @@ class RealizedVolCalculator:
         """
         # Derive currency from perp_name
         currency = perp_name.split("-")[0] if perp_name else "BTC"
-        candles = self._get_candles(currency)
-
-        if len(candles) < 50:
-            return {t["label"]: None for t in tenors}
+        if not tenors:
+            return {}
+        required_candles = max(int(t["days"] * 24) for t in tenors) + 1
+        candles = self._get_candles(currency, limit=required_candles)
 
         closes = [c["close"] for c in candles]
         log_returns = []
@@ -95,14 +121,13 @@ class RealizedVolCalculator:
 
         results = {}
         for tenor in tenors:
-            n = tenor["days"] * 24  # hourly returns needed
+            n = int(tenor["days"] * 24)  # hourly returns needed
             label = tenor["label"]
             if len(log_returns) < n:
                 results[label] = None
                 continue
             window = log_returns[-n:]
-            mean = sum(window) / len(window)
-            variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
+            variance = sum(r * r for r in window) / len(window)
             rv = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR) * 100
             results[label] = round(rv, 4)
 
@@ -122,8 +147,8 @@ class RealizedVolCalculator:
             if now - cached_time < _CACHE_TTL:
                 return cached_data
 
-        candles = self._get_candles(currency)
-        n_returns = tenor_days * 24  # hourly returns for the window
+        n_returns = int(tenor_days * 24)  # hourly returns for the window
+        candles = self._get_candles(currency, limit=n_returns + 350)
 
         if len(candles) < n_returns + 2:
             logger.warning("Not enough candles for %s %dD RV: have %d, need %d",
@@ -144,8 +169,7 @@ class RealizedVolCalculator:
         results = {}
         for end in range(n_returns, len(log_returns) + 1):
             window = log_returns[end - n_returns:end]
-            mean = sum(window) / len(window)
-            variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
+            variance = sum(r * r for r in window) / len(window)
             rv = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR) * 100
             # Key: candle open time floored to hour (unix seconds)
             hour_ts = times[end] // 3600000 * 3600

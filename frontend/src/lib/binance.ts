@@ -19,15 +19,21 @@ export async function fetchBinanceCandles(
   interval = "1h",
   limit = 1000
 ): Promise<Candle[]> {
+  const endTime = Math.floor(Date.now() / 3_600_000) * 3_600_000 - 1;
   const res = await fetch(
-    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&endTime=${endTime}`
   );
   if (!res.ok) return [];
   const raw: unknown[][] = await res.json();
-  return raw.map((c) => ({
-    time: c[0] as number,
-    close: parseFloat(c[4] as string),
-  }));
+  return raw
+    .filter((c) => {
+      const closeTime = typeof c[6] === "number" ? c[6] : (c[0] as number) + 3_600_000 - 1;
+      return closeTime <= Date.now();
+    })
+    .map((c) => ({
+      time: c[0] as number,
+      close: parseFloat(c[4] as string),
+    }));
 }
 
 /**
@@ -45,7 +51,7 @@ export async function fetchBinanceCandlesPaginated(
   }
 
   const allCandles: Candle[] = [];
-  let endTime = Date.now();
+  let endTime = Math.floor(Date.now() / 3_600_000) * 3_600_000 - 1;
 
   while (allCandles.length < totalNeeded) {
     const remaining = totalNeeded - allCandles.length;
@@ -57,13 +63,20 @@ export async function fetchBinanceCandlesPaginated(
     const raw: unknown[][] = await res.json();
     if (raw.length === 0) break;
 
-    const batch = raw.map((c) => ({
-      time: c[0] as number,
-      close: parseFloat(c[4] as string),
-    }));
+    const batch = raw
+      .filter((c) => {
+        const closeTime = typeof c[6] === "number" ? c[6] : (c[0] as number) + 3_600_000 - 1;
+        return closeTime <= Date.now();
+      })
+      .map((c) => ({
+        time: c[0] as number,
+        close: parseFloat(c[4] as string),
+      }));
+
+    if (batch.length === 0) break;
 
     allCandles.unshift(...batch);
-    // Move endTime to just before the oldest candle in this batch
+    // Move endTime to just before the oldest completed candle in this batch
     endTime = batch[0].time - 1;
   }
 
