@@ -10,6 +10,24 @@ export interface RVPoint {
   rv: number;
 }
 
+export function filterRVSeriesForRange(
+  series: RVPoint[],
+  hours: number,
+  nowSec: number = Math.floor(Date.now() / 1000)
+): RVPoint[] {
+  const cutoff = nowSec - hours * 3600;
+  const filtered = series.filter((p) => p.time >= cutoff);
+  if (filtered.length > 0) return filtered;
+
+  // Binance 1h candles only finalize once per hour. During the first ~2 hours
+  // after a completed candle, a 1H chart can have fresh IV samples but no RV
+  // point inside the strict window. Keep the latest completed RV point so the
+  // chart can render a flat RV/carry overlay instead of disappearing.
+  const latest = series[series.length - 1];
+  if (latest && latest.time >= cutoff - 2 * 3600) return [latest];
+  return [];
+}
+
 function computeRollingRV(candles: Candle[], tenorDays: number): RVPoint[] {
   const nReturns = tenorDays * 24;
   if (candles.length < nReturns + 2) return [];
@@ -51,8 +69,7 @@ export function useRVSeries(tenor: TenorLabel, asset: Asset, enabled: boolean, h
       const needed = tenorDays * 24 + hours + 24;
       const candles = await fetchBinanceCandlesPaginated(symbol, needed);
       const series = computeRollingRV(candles, tenorDays);
-      const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
-      setData(series.filter((p) => p.time >= cutoff));
+      setData(filterRVSeriesForRange(series, hours));
     } catch {
       // silently ignore — RV is optional overlay
     }

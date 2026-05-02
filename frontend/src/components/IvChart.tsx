@@ -296,7 +296,7 @@ function SingleChart({
     }
 
     chartRef.current.timeScale().fitContent();
-  }, [data, field, t1Value]);
+  }, [data, field, t1Value, overrideLineData]);
 
   return (
     <div>
