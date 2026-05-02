@@ -29,7 +29,8 @@ class Poller:
                  currency="BTC", index_name="btc_usd",
                  ticker_store=None, subscription_manager=None,
                  ws_spot_stale_seconds=5,
-                 rv_calculator=None, perp_name=None):
+                 rv_calculator=None, perp_name=None,
+                 backend_rv_enabled=True):
         self._client = client
         self._calculator = calculator
         self._rr_calculator = rr_calculator
@@ -44,6 +45,7 @@ class Poller:
         self._ws_spot_stale = ws_spot_stale_seconds
         self._rv_calculator = rv_calculator
         self._perp_name = perp_name
+        self._backend_rv_enabled = backend_rv_enabled
 
         self._latest_tenor_data = {}
         self._latest_price = {"price": None}
@@ -75,6 +77,20 @@ class Poller:
             if ws_price is not None and age < self._ws_spot_stale:
                 return ws_price
         return self._client.get_spot_price(self._index_name)
+
+    def _compute_rv_results(self):
+        """Compute backend RV when enabled.
+
+        Production GCP blocks Binance (HTTP 451), so app.py disables this by
+        default and the browser-side Binance path is the RV/carry source.
+        """
+        if not self._backend_rv_enabled or not self._rv_calculator or not self._perp_name:
+            return {}
+        try:
+            return self._rv_calculator.compute_all_tenors(self._perp_name, self._tenors)
+        except Exception:
+            logger.exception("RV computation failed for %s", self._currency)
+            return {}
 
     def _poll_volatility(self):
         """Continuously fetch options and compute multi-tenor vol + RR."""
@@ -108,14 +124,7 @@ class Poller:
                 )
 
                 # 3. Compute realized volatility
-                rv_results = {}
-                if self._rv_calculator and self._perp_name:
-                    try:
-                        rv_results = self._rv_calculator.compute_all_tenors(
-                            self._perp_name, self._tenors
-                        )
-                    except Exception:
-                        logger.exception("RV computation failed for %s", self._currency)
+                rv_results = self._compute_rv_results()
 
                 # 4. Get DoD changes from history
                 dod_changes = self._history_store.get_dod_changes(self._currency)

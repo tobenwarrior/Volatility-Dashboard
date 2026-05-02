@@ -24,6 +24,7 @@ from web.poller import Poller
 from web.server import create_app
 
 BASE_PORT = int(os.environ.get("PORT", 5000))
+BACKEND_RV_ENABLED = os.environ.get("BACKEND_RV_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
 
 
 # --- Shared dependencies ---
@@ -50,7 +51,7 @@ rr_calculator = RiskReversalCalculator(
     ticker_store=ticker_store,
 )
 history_store = HistoryStore(save_interval_seconds=SAVE_INTERVAL)
-rv_calculator = RealizedVolCalculator(client)
+rv_calculator = RealizedVolCalculator(client) if BACKEND_RV_ENABLED else None
 
 # --- One poller per asset ---
 pollers = {}
@@ -65,6 +66,7 @@ for currency, asset_cfg in ASSETS.items():
         ws_spot_stale_seconds=WS_SPOT_STALE_SECONDS,
         rv_calculator=rv_calculator,
         perp_name=asset_cfg["perp_name"],
+        backend_rv_enabled=BACKEND_RV_ENABLED,
     )
     poller.start()
     pollers[currency] = poller
@@ -77,4 +79,5 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info("Starting on port %d", BASE_PORT)
+    logging.info("Backend RV polling enabled: %s", BACKEND_RV_ENABLED)
     app.run(host="0.0.0.0", port=BASE_PORT, debug=False)
