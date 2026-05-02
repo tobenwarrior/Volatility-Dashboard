@@ -77,7 +77,7 @@ function RrCellWithTooltip({ tenor }: { tenor: TenorData }) {
             <span className="text-white">{formatSigned(tenor.bf_25d)}</span>
           </div>
           <div className="mt-1.5 text-[9px] text-white/40">
-            RR = Call &minus; Put &nbsp;&middot;&nbsp; Fly = (C+P)/2 &minus; ATM
+            RR = Call &minus; Put &nbsp;&middot;&nbsp; Fly = C+P &minus; 2&times;ATM
           </div>
         </div>
       )}
@@ -165,7 +165,7 @@ export default function TenorTable({ tenors }: TenorTableProps) {
         <span>&middot;</span>
         <span>RR = Call IV &minus; Put IV</span>
         <span>&middot;</span>
-        <span>Fly = (Call + Put)/2 &minus; ATM</span>
+        <span>Fly = Call + Put &minus; 2&times;ATM</span>
         <span>&middot;</span>
         <span>Norm RR = RR / ATM</span>
         <span>&middot;</span>

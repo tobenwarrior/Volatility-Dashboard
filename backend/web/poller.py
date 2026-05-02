@@ -9,6 +9,18 @@ import time
 logger = logging.getLogger(__name__)
 
 
+def compute_25d_fly(atm_iv, put_iv, call_iv):
+    """Compute 25-delta fly using trader premium convention.
+
+    Formula: Fly = 25Δ Call IV + 25Δ Put IV - 2 * ATM IV.
+    This is exactly 2x the half-sum convention and matches the trader's
+    requested quoting basis for this dashboard.
+    """
+    if atm_iv is None or put_iv is None or call_iv is None:
+        return None
+    return call_iv + put_iv - 2 * atm_iv
+
+
 class Poller:
     """Manages background threads that poll Deribit for price and volatility data."""
 
@@ -118,14 +130,10 @@ class Poller:
                     put_iv = rr_info.get("put_25d_iv")
                     call_iv = rr_info.get("call_25d_iv")
 
-                    # 25d butterfly = (25d_call + 25d_put) / 2 - ATM
-                    # Market convention (Bloomberg/Deribit): measures smile
-                    # convexity (kurtosis proxy). Positive = wings expensive
-                    # relative to ATM.
-                    if atm_iv is not None and put_iv is not None and call_iv is not None:
-                        bf_25d = (call_iv + put_iv) / 2 - atm_iv
-                    else:
-                        bf_25d = None
+                    # 25d butterfly = 25d_call + 25d_put - 2 * ATM
+                    # Trader premium convention: exactly 2x the half-sum
+                    # convention. Positive = wings expensive relative to ATM.
+                    bf_25d = compute_25d_fly(atm_iv, put_iv, call_iv)
 
                     tenor_list.append({
                         "label": label,
