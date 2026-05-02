@@ -23,7 +23,7 @@ class SubscriptionManager:
         self._candidates = candidates_per_side
         self._current_subs = {}  # {currency: set(channel_strings)}
 
-    def update_subscriptions(self, currency, spot, expiry_data, expiry_days):
+    def update_subscriptions(self, currency, spot, expiry_data, expiry_days, expiry_refs=None):
         """Recompute and adjust subscriptions after a poll cycle.
 
         Uses approximate BS delta ranking to identify which strikes are
@@ -34,6 +34,7 @@ class SubscriptionManager:
             spot: Current spot price
             expiry_data: {expiry_dt: {strike: {"C": iv, "P": iv}}}
             expiry_days: {expiry_dt: float}
+            expiry_refs: Optional {expiry_dt: Deribit underlying/forward reference price}
         """
         needed_channels = set()
 
@@ -47,17 +48,19 @@ class SubscriptionManager:
             put_ranked = []
             call_ranked = []
 
+            reference = (expiry_refs or {}).get(expiry) or spot
+
             for strike, ivs in strikes_data.items():
-                if strike < spot and "P" in ivs:
+                if strike < reference and "P" in ivs:
                     sigma = ivs["P"] / 100.0
                     if sigma > 0:
-                        d1 = (math.log(spot / strike) + 0.5 * sigma**2 * t_years) / (sigma * sqrt_t)
+                        d1 = (math.log(reference / strike) + 0.5 * sigma**2 * t_years) / (sigma * sqrt_t)
                         abs_delta = 0.5 * (1.0 + math.erf(-d1 / math.sqrt(2.0)))
                         put_ranked.append((abs(abs_delta - self._target_delta), strike))
-                elif strike > spot and "C" in ivs:
+                elif strike > reference and "C" in ivs:
                     sigma = ivs["C"] / 100.0
                     if sigma > 0:
-                        d1 = (math.log(spot / strike) + 0.5 * sigma**2 * t_years) / (sigma * sqrt_t)
+                        d1 = (math.log(reference / strike) + 0.5 * sigma**2 * t_years) / (sigma * sqrt_t)
                         abs_delta = 0.5 * (1.0 + math.erf(d1 / math.sqrt(2.0)))
                         call_ranked.append((abs(abs_delta - self._target_delta), strike))
 

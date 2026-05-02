@@ -15,7 +15,7 @@ class TickerDataStore:
     def __init__(self):
         self._lock = threading.Lock()
         self._spot_prices = {}       # {index_name: {"price": float, "timestamp": int}}
-        self._ticker_data = {}       # {instrument_name: {"delta": float, "mark_iv": float, "timestamp": int}}
+        self._ticker_data = {}       # {instrument_name: {"delta": float, "mark_iv": float, "timestamp": int, "received_at": float}}
         self._spot_updated_at = {}   # {index_name: monotonic time}
 
     # ---- Writes (called from asyncio WebSocket thread) ----
@@ -36,6 +36,7 @@ class TickerDataStore:
                 "delta": delta,
                 "mark_iv": mark_iv,
                 "timestamp": timestamp,
+                "received_at": time.monotonic(),
             }
 
     def clear_tickers(self, instrument_names=None):
@@ -63,8 +64,14 @@ class TickerDataStore:
                 return float("inf")
             return time.monotonic() - updated
 
-    def get_ticker(self, instrument_name):
-        """Return latest ticker data dict, or None."""
+    def get_ticker(self, instrument_name, max_age_seconds=None):
+        """Return latest ticker data dict, or None if missing/stale."""
         with self._lock:
             entry = self._ticker_data.get(instrument_name)
-            return dict(entry) if entry else None
+            if not entry:
+                return None
+            if max_age_seconds is not None:
+                received_at = entry.get("received_at")
+                if received_at is None or time.monotonic() - received_at > max_age_seconds:
+                    return None
+            return dict(entry)

@@ -2,6 +2,7 @@ import sys
 import threading
 import types
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
 # The unit tests exercise cache-only methods and never instantiate a real
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 if "psycopg2" not in sys.modules:
     psycopg2_stub = types.ModuleType("psycopg2")
     psycopg2_pool_stub = types.ModuleType("psycopg2.pool")
+    psycopg2_pool_stub.ThreadedConnectionPool = lambda *args, **kwargs: object()
     psycopg2_stub.pool = psycopg2_pool_stub
     sys.modules["psycopg2"] = psycopg2_stub
     sys.modules["psycopg2.pool"] = psycopg2_pool_stub
@@ -74,6 +76,28 @@ class HistoryRangeChangesTest(unittest.TestCase):
         self.assertIsNone(changes["30D"]["rr_change"])
         self.assertIsNone(changes["30D"]["bf_change"])
         self.assertIsNone(changes["30D"]["change_hours"])
+
+
+class HistoryStoreInitTest(unittest.TestCase):
+    def test_init_runs_retention_cleanup_after_backfill(self):
+        calls = []
+
+        def fake_ensure_db(self):
+            calls.append("ensure")
+
+        def fake_backfill(self):
+            calls.append("backfill")
+
+        def fake_cleanup(self):
+            calls.append("cleanup")
+
+        with patch.object(HistoryStore, "_ensure_db", fake_ensure_db), \
+             patch.object(HistoryStore, "_backfill_cache", fake_backfill), \
+             patch.object(HistoryStore, "cleanup_old", fake_cleanup), \
+             patch("services.history.psycopg2.pool.ThreadedConnectionPool", return_value=object()):
+            HistoryStore(db_url="postgres://example")
+
+        self.assertEqual(calls, ["ensure", "backfill", "cleanup"])
 
 
 if __name__ == "__main__":

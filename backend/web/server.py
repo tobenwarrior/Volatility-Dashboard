@@ -75,7 +75,12 @@ def create_app(pollers, history_store, rv_calculator=None, assets=None, tenors=N
             hours = float(request.args.get("hours", "48"))
         except (ValueError, TypeError):
             hours = 48.0
-        hours = max(0.01, min(hours, 744.0))
+        try:
+            from config import HISTORY_KEEP_DAYS
+            max_hours = HISTORY_KEEP_DAYS * 24.0
+        except Exception:
+            max_hours = 4320.0
+        hours = max(0.01, min(hours, max_hours))
         data = history_store.get_history(tenor, hours, currency)
 
         return jsonify(data)

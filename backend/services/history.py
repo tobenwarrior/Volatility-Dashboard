@@ -47,6 +47,10 @@ class HistoryStore:
         self._cache = {}
         self._cache_lock = threading.Lock()
         self._backfill_cache()
+        # Enforce retention promptly on startup as well as during periodic
+        # writes, so Supabase never keeps stale rows longer than necessary
+        # after restarts. Normal API reads still use the in-memory cache.
+        self.cleanup_old()
 
     @contextmanager
     def _connect(self):

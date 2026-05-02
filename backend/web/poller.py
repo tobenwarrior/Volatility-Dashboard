@@ -93,6 +93,7 @@ class Poller:
                     self._subscription_manager.update_subscriptions(
                         self._currency, spot,
                         multi["expiry_data"], multi["expiry_days"],
+                        multi.get("expiry_refs"),
                     )
 
                 # 2. Compute 25d RR + raw 25d put/call IVs for all tenors.
@@ -103,6 +104,7 @@ class Poller:
                     multi["expiry_days"],
                     multi["tenor_expiries"],
                     self._currency,
+                    multi.get("expiry_refs"),
                 )
 
                 # 3. Compute realized volatility
