@@ -13,6 +13,17 @@ class FakeTickerStore:
         return self.tickers.get(name)
 
 
+class AgeSensitiveTickerStore:
+    def __init__(self, tickers, required_max_age_seconds):
+        self.tickers = tickers
+        self.required_max_age_seconds = required_max_age_seconds
+
+    def get_ticker(self, name, max_age_seconds=None):
+        if max_age_seconds is None or max_age_seconds < self.required_max_age_seconds:
+            return None
+        return self.tickers.get(name)
+
+
 class RiskReversalReferencePriceTest(unittest.TestCase):
     def test_ivs_at_expiry_uses_expiry_reference_for_call_put_side_selection(self):
         expiry = datetime(2026, 5, 8, 8, 0, tzinfo=timezone.utc)
@@ -40,6 +51,36 @@ class RiskReversalReferencePriceTest(unittest.TestCase):
 
         self.assertAlmostEqual(put_iv, 45.0)
         self.assertAlmostEqual(call_iv, 41.0)
+
+    def test_default_ticker_freshness_window_tolerates_quiet_deribit_wings(self):
+        expiry = datetime(2026, 5, 8, 8, 0, tzinfo=timezone.utc)
+        tickers = {
+            format_instrument_name("BTC", expiry, 90.0, "P"): {"delta": -0.20, "mark_iv": 44.0},
+            format_instrument_name("BTC", expiry, 95.0, "P"): {"delta": -0.30, "mark_iv": 46.0},
+            format_instrument_name("BTC", expiry, 105.0, "C"): {"delta": 0.20, "mark_iv": 40.0},
+            format_instrument_name("BTC", expiry, 110.0, "C"): {"delta": 0.30, "mark_iv": 42.0},
+        }
+        calc = RiskReversalCalculator(
+            ticker_store=AgeSensitiveTickerStore(tickers, required_max_age_seconds=120.0)
+        )
+        strikes_data = {
+            90.0: {"P": 1.0},
+            95.0: {"P": 1.0},
+            105.0: {"C": 1.0},
+            110.0: {"C": 1.0},
+        }
+
+        put_iv, call_iv = calc._ivs_at_expiry(
+            spot=100.0,
+            expiry=expiry,
+            strikes_data=strikes_data,
+            currency="BTC",
+            reference_price=100.0,
+        )
+
+        self.assertAlmostEqual(put_iv, 45.0)
+        self.assertAlmostEqual(call_iv, 41.0)
+
     def test_interp_pair_uses_total_variance_across_expiries(self):
         put_iv, call_iv = RiskReversalCalculator._interp_pair(
             near_pair=(30.0, 40.0),

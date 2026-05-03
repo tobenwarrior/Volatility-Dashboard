@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RiskReversalCalculator:
     """Computes 25-delta risk reversal for a set of tenors."""
 
-    def __init__(self, target_delta=0.25, ticker_store=None, ticker_max_age_seconds=30):
+    def __init__(self, target_delta=0.25, ticker_store=None, ticker_max_age_seconds=300):
         self._target_delta = target_delta
         self._ticker_store = ticker_store
         self._ticker_max_age_seconds = ticker_max_age_seconds
