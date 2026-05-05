@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { TenorData, TimeRange } from "@/types";
+import { displayTenorLabel } from "@/lib/tenorLabels";
 
 interface TermStructureChartProps {
   tenors: TenorData[] | undefined;
@@ -247,7 +248,7 @@ export default function TermStructureChart({ tenors, changeRange = "24H" }: Term
         {/* Hover tooltip for IV change — OUTSIDE clipPath so it's never cut off */}
         {hovered !== null && (valid[hovered]?.iv_change ?? valid[hovered]?.dod_iv_change) != null && (() => {
           const c = (valid[hovered].iv_change ?? valid[hovered].dod_iv_change)!;
-          const label = valid[hovered].label;
+          const label = displayTenorLabel(valid[hovered].label);
           const tx = xPos(hovered);
           // Position tooltip above bar if positive, below if negative
           // Clamp within SVG bounds
@@ -337,7 +338,7 @@ export default function TermStructureChart({ tenors, changeRange = "24H" }: Term
             fontSize={11}
             fontWeight={500}
           >
-            {t.label}
+            {displayTenorLabel(t.label)}
           </text>
         ))}
 

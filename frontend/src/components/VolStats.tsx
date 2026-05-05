@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Asset, VolStatsEntry, TimeRange } from "@/types";
 import { useVolStats } from "@/hooks/useVolStats";
 import TimeRangeSelector from "@/components/TimeRangeSelector";
+import { displayTenorLabel } from "@/lib/tenorLabels";
 
 function PercentileCell({ value }: { value: number | null }) {
   if (value == null) return <span className="text-white/40">&mdash;</span>;
@@ -52,7 +53,7 @@ function StatsRow({ entry }: { entry: VolStatsEntry }) {
   return (
     <tr className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors">
       <td className="py-3 pr-4 text-sm font-semibold text-white">
-        {entry.label}
+        {displayTenorLabel(entry.label)}
       </td>
       <td className="py-3 px-4 text-sm tabular-nums font-semibold text-deribit-blue">
         {entry.current_iv != null ? `${entry.current_iv.toFixed(2)}%` : "\u2014"}

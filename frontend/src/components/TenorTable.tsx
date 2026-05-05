@@ -1,4 +1,5 @@
 import { TenorData } from "@/types";
+import { displayTenorLabel } from "@/lib/tenorLabels";
 
 interface TenorTableProps {
   tenors: TenorData[] | undefined;
@@ -94,7 +95,7 @@ function TenorRow({ tenor }: { tenor: TenorData }) {
   return (
     <tr className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors">
       <td className="py-3 pl-1 text-left text-sm font-semibold text-white">
-        {tenor.label}
+        {displayTenorLabel(tenor.label)}
       </td>
       <td className={`${NUM_CELL} font-semibold text-deribit-blue`}>
         {tenor.atm_iv != null ? `${tenor.atm_iv.toFixed(2)}%` : "\u2014"}
