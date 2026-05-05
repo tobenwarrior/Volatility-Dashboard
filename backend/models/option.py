@@ -59,8 +59,8 @@ class VolatilityResult:
 @dataclass
 class TenorResult:
     """Result for a single tenor in the multi-tenor surface."""
-    label: str           # "1W", "2W", "30D", "60D", "90D", "180D"
-    target_days: int     # 7, 14, 30, 60, 90, 180
+    label: str           # "1W", "2W", "30D", "60D", "90D", "180D", "9M"
+    target_days: int     # 7, 14, 30, 60, 90, 180, 270
     atm_iv: Optional[float]
     rr_25d: Optional[float]
     dod_iv_change: Optional[float]
