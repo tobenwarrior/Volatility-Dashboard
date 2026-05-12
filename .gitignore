@@ -34,3 +34,4 @@ frontend/.next/
 .DS_Store
 Thumbs.db
 .next/
+.vercel

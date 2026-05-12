@@ -1,0 +1,16 @@
+services:
+  vol-backend:
+    build: ./backend
+    container_name: vol-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=5000
+      - BACKEND_RV_ENABLED=${BACKEND_RV_ENABLED:-0}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
